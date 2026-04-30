@@ -98,6 +98,10 @@ public static class FloorCeilingGenerator
         var cs = heightmap.CellSize;
         var clampedCells = 0;
         ushort clampedMaxRaw = 0;
+        // Overlap between adjacent cell stacks (raw units). Brushes share
+        // exact Z planes already, but a small overlap is forgiving against
+        // floating point noise on the seam plane. Same constant as walls.
+        const ushort StackOverlapRaw = HeightQuantStep;
 
         foreach (var piece in pieces)
         {
@@ -107,13 +111,11 @@ public static class FloorCeilingGenerator
                 minQuant, maxRawAllowed,
                 ref clampedCells, ref clampedMaxRaw);
 
-            // Always emit ONE base floor + ONE base ceiling for the whole
-            // piece, even when paint is uniform. This guarantees the piece's
-            // interior is hermetically sealed -- previously, cell-clipped
-            // sub-fragments at sharp polygon corners could leave pinhole
-            // gaps between the floor edge and the wall's inner face,
-            // causing q3map2 leaks. Stacked brushes then add elevated
-            // sections on top.
+            // Per-piece BASE slab from floorBase up to the piece's lowest
+            // quantized cell top. This hermetically seals sliver fragments
+            // at sharp polygon corners (where cell-clipped pieces can be
+            // arbitrarily small). It IS the floor for any cell whose
+            // height equals baseRaw -- those cells emit no stacked brush.
             var pieceCcw = piece;
             var baseTop = zFloorBase + baseRaw;
             if (baseTop > zFloorBase)
@@ -130,15 +132,23 @@ public static class FloorCeilingGenerator
                     bottomTexture: ceilingTexture));
             }
 
-            // Stacked elevations: one brush per merged same-value region
-            // whose value is strictly above the piece's base.
-            foreach (var (footprint, raw) in regions)
+            // Stacked elevations: one brush per merged same-(top,bottom)
+            // region whose top is strictly above the piece's base. Each
+            // region's BOTTOM Z floats up to its lowest neighbour's top so
+            // plateau interiors get a thin (~HeightQuantStep) cap brush
+            // and only cells bordering a step keep a tall cladding brush
+            // down to the lower neighbour. The volume above the base slab
+            // and below a plateau cap is enclosed (sealed by perimeter
+            // cladding brushes) so the level remains leak-free.
+            foreach (var (footprint, topRaw, bottomRaw) in regions)
             {
-                if (raw <= baseRaw) continue;
-                var floorTop = zFloorBase + raw;
+                if (topRaw <= baseRaw) continue;
+                var floorTop = zFloorBase + topRaw;
                 if (floorTop <= baseTop) continue;
+                var bottom = Math.Max(baseTop, zFloorBase + bottomRaw - StackOverlapRaw);
+                if (bottom >= floorTop) bottom = baseTop;
                 result.FloorBrushes.Add(BrushFactory.MakeVerticalPrism(
-                    footprint, baseTop, floorTop,
+                    footprint, bottom, floorTop,
                     sideTexture: wallTexture,
                     topTexture: floorTexture,
                     bottomTexture: floorTexture));
@@ -163,13 +173,14 @@ public static class FloorCeilingGenerator
 
     /// <summary>
     /// Cell-clip + merge: tile the convex piece with cell-clipped polygons
-    /// tagged by quantized height, then greedily merge same-value adjacent
-    /// pieces while convex. Returns the final list of (footprint, rawHeight)
-    /// pairs whose footprints exactly tile the input piece, plus the
-    /// minimum quantized raw value seen across the piece (used as the
-    /// piece's "base" height).
+    /// tagged by (quantized topRaw, bottomRaw) where bottomRaw is the min
+    /// neighbour height (so plateau interiors collapse to thin slabs and
+    /// only step-edge cells get a tall cladding brush). Returns the final
+    /// list of (footprint, topRaw, bottomRaw) triples whose footprints
+    /// exactly tile the input piece, plus the minimum topRaw seen across
+    /// the piece (informational; the caller now uses a fixed base level).
     /// </summary>
-    private static (List<(List<Vec2> Footprint, ushort RawHeight)> Regions, ushort BaseRaw) ComputeRegionsForPiece(
+    private static (List<(List<Vec2> Footprint, ushort TopRaw, ushort BottomRaw)> Regions, ushort BaseRaw) ComputeRegionsForPiece(
         List<Vec2> piece,
         Heightmap16 hm,
         Vec2 oMin,
@@ -179,7 +190,7 @@ public static class FloorCeilingGenerator
         ref int clampedCells,
         ref ushort clampedMaxRaw)
     {
-        var output = new List<(List<Vec2> Footprint, ushort RawHeight)>();
+        var output = new List<(List<Vec2> Footprint, ushort TopRaw, ushort BottomRaw)>();
         var (pMin, pMax) = ComputeBounds(piece);
         ushort baseRaw = ushort.MaxValue;
 
@@ -193,7 +204,27 @@ public static class FloorCeilingGenerator
         cx1 = Math.Min(hm.Width - 1, cx1); cy1 = Math.Min(hm.Height - 1, cy1);
         if (cx1 < cx0 || cy1 < cy0) return (output, minQuant);
 
-        var pieces = new List<(List<Vec2> Poly, ushort RawHeight)>();
+        // Helper: quantize+clamp a raw value (without recording clamp
+        // warnings -- those are only for cells *inside* this piece).
+        ushort QuantClamp(ushort raw)
+        {
+            if (raw > maxRawAllowed) raw = maxRawAllowed;
+            var q = (ushort)((raw + HeightQuantStep / 2) / HeightQuantStep * HeightQuantStep);
+            if (q < minQuant) q = minQuant;
+            if (q > maxRawAllowed) q = maxRawAllowed;
+            return q;
+        }
+        // Sample neighbour's quantized "exposed top" raw. Off-grid =
+        // minQuant (= the piece-base level), so cells at the polygon edge
+        // get bottomRaw = minQuant -> stack drops to baseTop, matching
+        // the wall behaviour.
+        ushort NeighbourTopRaw(int nx, int ny)
+        {
+            if (nx < 0 || ny < 0 || nx >= hm.Width || ny >= hm.Height) return minQuant;
+            return QuantClamp(hm.Sample(nx, ny));
+        }
+
+        var pieces = new List<(List<Vec2> Poly, ushort TopRaw, ushort BottomRaw)>();
         for (var cy = cy0; cy <= cy1; cy++)
         for (var cx = cx0; cx <= cx1; cx++)
         {
@@ -212,25 +243,31 @@ public static class FloorCeilingGenerator
             // a polygon" (< 3 vertices after dedupe).
 
             var raw = hm.Sample(cx, cy);
-            // Clamp above ceiling.
+            // Track clamp warnings for cells inside the piece.
             if (raw > maxRawAllowed)
             {
                 clampedCells++;
                 if (raw > clampedMaxRaw) clampedMaxRaw = raw;
-                raw = maxRawAllowed;
             }
-            // Quantize.
-            var q = (ushort)((raw + HeightQuantStep / 2) / HeightQuantStep * HeightQuantStep);
-            // Clamp lower bound.
-            if (q < minQuant) q = minQuant;
-            if (q > maxRawAllowed) q = maxRawAllowed;
-            if (q < baseRaw) baseRaw = q;
-            pieces.Add((clipped, q));
+            var topRaw = QuantClamp(raw);
+            if (topRaw < baseRaw) baseRaw = topRaw;
+
+            // Bottom raw: lowest neighbour's exposed top, clamped to
+            // [minQuant, topRaw]. Plateau interior cells (all 4 neighbours
+            // share this cell's height) collapse to bottomRaw == topRaw,
+            // which the caller turns into a thin stack right under the
+            // top. Step-edge cells get a low neighbour -> tall cladding
+            // brush (necessary geometry).
+            var nMin = (ushort)Math.Min(
+                Math.Min(NeighbourTopRaw(cx + 1, cy), NeighbourTopRaw(cx - 1, cy)),
+                Math.Min(NeighbourTopRaw(cx, cy + 1), NeighbourTopRaw(cx, cy - 1)));
+            if (nMin > topRaw) nMin = topRaw;
+            if (nMin < minQuant) nMin = minQuant;
+            pieces.Add((clipped, topRaw, nMin));
         }
 
-        // Greedy merge: iterate until nothing more can be combined.
-        // Repeatedly pick any pair of polygons sharing an edge with the
-        // same height value, merge if their union remains convex.
+        // Greedy merge: same (TopRaw, BottomRaw) pairs while the union
+        // remains convex.
         var changed = true;
         while (changed)
         {
@@ -239,22 +276,16 @@ public static class FloorCeilingGenerator
             {
                 for (var b = a + 1; b < pieces.Count && !changed; b++)
                 {
-                    if (pieces[a].RawHeight != pieces[b].RawHeight) continue;
+                    if (pieces[a].TopRaw != pieces[b].TopRaw) continue;
+                    if (pieces[a].BottomRaw != pieces[b].BottomRaw) continue;
                     if (!PolygonDecomposer.TryMergeConvexPolygons(pieces[a].Poly, pieces[b].Poly, out var merged))
                         continue;
-                    // Prune collinear vertices on the merged result. Two
-                    // adjacent cell-clipped polygons may share a boundary
-                    // composed of multiple collinear cell-edge segments;
-                    // TryMergeConvexPolygons only removes ONE shared edge,
-                    // so without this prune the polygon retains duplicate
-                    // vertices at every cell-corner along the shared side
-                    // and a subsequent merge attempt with a third polygon
-                    // would fail to find a unique shared edge -> floor brush
-                    // ends up with hundreds of redundant side faces and a
-                    // bad-normal/MAX_BUILD_SIDES q3map2 error.
+                    // Prune collinear vertices on the merged result -- see
+                    // the long comment in the original code: without this
+                    // we hit q3map2 MAX_BUILD_SIDES on long shared edges.
                     var simplified = RectangleClipper.RemoveDegenerate(merged);
                     if (simplified.Count < 3) continue;
-                    pieces[a] = (simplified, pieces[a].RawHeight);
+                    pieces[a] = (simplified, pieces[a].TopRaw, pieces[a].BottomRaw);
                     pieces.RemoveAt(b);
                     changed = true;
                 }
@@ -263,13 +294,9 @@ public static class FloorCeilingGenerator
 
         foreach (var p in pieces)
         {
-            // Strip collinear vertices that accumulated from merging
-            // cell-clipped polygons -- otherwise the piece's straight edge
-            // gets one vertex per cell crossing and the resulting brush
-            // exceeds q3map2's MAX_BUILD_SIDES.
             var pruned = RectangleClipper.RemoveDegenerate(p.Poly);
             if (pruned.Count < 3) continue;
-            output.Add((pruned, p.RawHeight));
+            output.Add((pruned, p.TopRaw, p.BottomRaw));
         }
         if (baseRaw == ushort.MaxValue) baseRaw = minQuant;
         return (output, baseRaw);

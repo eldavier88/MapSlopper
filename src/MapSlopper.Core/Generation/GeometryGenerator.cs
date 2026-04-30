@@ -76,18 +76,26 @@ public static class GeometryGenerator
         // few cells just inside the polygon edge; take the MIN height of
         // those cells (lowest neighbouring floor). Wall bottom z =
         // zFloorBase + minHeight - overlap (clamped to >= zFloorBase).
+        //
+        // Wall SPLIT z (window strip) uses the MAX neighbouring height
+        // along the same inner-edge samples. The split must err HIGH —
+        // straddling cells of e.g. raw 100 and raw 200 should split above
+        // 200 — so the upper window strip is always above any visible
+        // floor surface that the wall borders. Split z =
+        // zFloorBase + maxNeighbourRaw + splitHeight.
         const double WallFloorOverlap = 16.0;
         var wallTop = ceilingBottom + project.CeilingThickness;
-        double WallBottomFor(int edgeIndex)
+        var splitHeight = project.WallSplitHeight ?? project.CeilingHeight;
+        (double Bottom, double SplitZ) WallVerticalsFor(int edgeIndex)
         {
             var n = poly.Count;
             var a = poly[edgeIndex];
             var b = poly[(edgeIndex + 1) % n];
-            // Sample several points along the inner side of the edge.
             var dir = (b - a).Normalized;
-            var inward = new Vec2(-dir.Y, dir.X); // CCW inward = left-perp of edge dir
+            var inward = new Vec2(-dir.Y, dir.X); // CCW inward = left-perp
             var samples = 8;
             ushort minRaw = ushort.MaxValue;
+            ushort maxRaw = 0;
             var found = false;
             for (var s = 0; s <= samples; s++)
             {
@@ -99,16 +107,24 @@ public static class GeometryGenerator
                 if (!poly.ContainsPoint(new Vec2(px, py))) continue;
                 var raw = project.Heightmap.Sample(cx, cy);
                 if (raw < minRaw) { minRaw = raw; found = true; }
+                if (raw > maxRaw) maxRaw = raw;
             }
-            if (!found) return floorBase; // no interior cells found -> safe fallback
-            var z = floorBase + minRaw - WallFloorOverlap;
-            return Math.Max(floorBase, z);
+            if (!found)
+                return (floorBase, floorBase + splitHeight);
+            var bottom = Math.Max(floorBase, floorBase + minRaw - WallFloorOverlap);
+            var splitZ = floorBase + maxRaw + splitHeight;
+            return (bottom, splitZ);
         }
+        // Cache per-edge to avoid scanning twice per edge.
+        var wallVerticals = new (double Bottom, double SplitZ)[poly.Count];
+        for (var i = 0; i < poly.Count; i++) wallVerticals[i] = WallVerticalsFor(i);
         var walls = WallGenerator.Generate(
-            poly, project.WallThickness, WallBottomFor, wallTop,
+            poly, project.WallThickness,
+            zBottomForEdge: i => wallVerticals[i].Bottom,
+            zTop: wallTop,
             sideTexture: project.WallTexture,
             capTexture: project.WallTexture,
-            splitHeight: project.WallSplitHeight ?? project.CeilingHeight,
+            splitZForEdge: i => wallVerticals[i].SplitZ,
             upperSideTexture: project.WindowTexture);
         ws.Brushes.AddRange(walls);
 
@@ -139,7 +155,7 @@ public static class GeometryGenerator
         if (triggerTypes.Types.Count > 0 && project.TriggerLayer.Width > 0 && project.TriggerLayer.Height > 0)
         {
             var triggers = TriggerGenerator.Generate(
-                poly, project.TriggerLayer, triggerTypes,
+                poly, project.TriggerLayer, project.Heightmap, triggerTypes,
                 zFloorBase: floorBase,
                 zCeilingTop: wallTop);
             doc.Entities.AddRange(triggers.Entities);

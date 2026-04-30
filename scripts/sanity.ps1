@@ -87,10 +87,14 @@ foreach ($c in $cases) {
     } else { 0 }
 
     $brushOk = ($brushCount -eq $c.Expected)
-    # q3map2 emits one meta surface per brush face that survives merging. For our
-    # convex prism brushes the count is N+2 faces per brush; checking that it's
-    # >= expected brush count and bsp > 1KB is enough to confirm acceptance.
-    $q3Ok = ([int]$metaSurf -ge $c.Expected) -and ($bspSize -gt 1024)
+    # q3map2 -meta merges all coplanar faces across brushes (same texture +
+    # same plane), so for a flat-floor convex polygon the surface count
+    # collapses dramatically (e.g. all wall lower-strips share a texture
+    # and merge into a small ring). Don't tie this threshold to the brush
+    # count -- just confirm q3map2 accepted the .map by emitting at least
+    # the unavoidable {floor, ceiling, walls} surfaces and a non-trivial
+    # BSP.
+    $q3Ok = ([int]$metaSurf -ge 3) -and ($bspSize -gt 1024)
     $tag = if ($brushOk -and $q3Ok) { "OK" } else { "FAIL" }
     $color = if ($brushOk -and $q3Ok) { "Green" } else { "Red" }
     Write-Host ("[N={0}] {1}  brushes={2} (expected {3})  metaSurfaces={4}  bsp={5}" -f `

@@ -39,28 +39,26 @@ public static class WallGenerator
 
     /// <summary>
     /// Per-edge overload with optional horizontal split. When
-    /// <paramref name="splitHeight"/> is positive AND a wall's visible
-    /// height (zTop - zBottomForEdge(i)) exceeds it, the wall is emitted as
-    /// two stacked airtight prisms sharing a Z plane at
-    /// <c>zBottom + splitHeight</c>. The lower brush is textured with
+    /// <paramref name="splitZForEdge"/> is supplied AND the returned
+    /// absolute Z lies strictly between the wall's bottom and top, the
+    /// wall is emitted as two stacked airtight prisms sharing that Z
+    /// plane. The lower brush is textured with
     /// <paramref name="sideTexture"/>; the upper brush with
     /// <paramref name="upperSideTexture"/> (the "window" texture). Caps
-    /// (top/bottom) always use <paramref name="capTexture"/>; the shared
-    /// internal plane is also <paramref name="capTexture"/> so the two
-    /// brushes occupy adjacent volume with no T-junctions on the seam.
-    /// Walls shorter than <paramref name="splitHeight"/> stay as a single
-    /// brush.
+    /// (top/bottom) and the shared seam plane use
+    /// <paramref name="capTexture"/>. Walls whose split Z falls outside
+    /// (bottom, top) stay as a single brush.
     /// </summary>
     public static IReadOnlyList<Brush> Generate(
         Polygon2D ccwPolygon, double thickness, Func<int, double> zBottomForEdge, double zTop,
         string sideTexture, string capTexture,
-        double? splitHeight, string? upperSideTexture)
-        => GenerateInternal(ccwPolygon, thickness, zBottomForEdge, zTop, sideTexture, capTexture, splitHeight, upperSideTexture);
+        Func<int, double>? splitZForEdge, string? upperSideTexture)
+        => GenerateInternal(ccwPolygon, thickness, zBottomForEdge, zTop, sideTexture, capTexture, splitZForEdge, upperSideTexture);
 
     private static IReadOnlyList<Brush> GenerateInternal(
         Polygon2D ccwPolygon, double thickness, Func<int, double> zBottomForEdge, double zTop,
         string sideTexture, string capTexture,
-        double? splitHeight, string? upperSideTexture)
+        Func<int, double>? splitZForEdge, string? upperSideTexture)
     {
         if (!ccwPolygon.IsCcw())
             throw new ArgumentException("Polygon must be CCW.", nameof(ccwPolygon));
@@ -125,11 +123,21 @@ public static class WallGenerator
             var zBottom = zBottomForEdge(i);
             if (zTop <= zBottom) continue; // skip degenerate
 
-            var wallHeight = zTop - zBottom;
-            var doSplit = splitHeight.HasValue
-                          && splitHeight.Value > 0
-                          && upperSideTexture is not null
-                          && wallHeight > splitHeight.Value + 1e-6; // ignore sub-unit float slop
+            // Compute split Z (absolute). Skip splitting when:
+            //  - no callback supplied
+            //  - upper texture not provided
+            //  - split z would clamp the upper or lower brush below a
+            //    sensible minimum thickness (avoid sliver brushes that
+            //    q3map2 may discard)
+            const double MinHalfThickness = 1.0;
+            var doSplit = false;
+            double zSplit = 0;
+            if (splitZForEdge is not null && upperSideTexture is not null)
+            {
+                zSplit = splitZForEdge(i);
+                doSplit = zSplit > zBottom + MinHalfThickness
+                          && zSplit < zTop - MinHalfThickness;
+            }
 
             if (!doSplit)
             {
@@ -144,10 +152,7 @@ public static class WallGenerator
 
             // Split at a shared Z plane. Both brushes use the same XY
             // footprint so the seam is a perfect plane match (q3map2 won't
-            // create T-junctions and there are no leaks). The internal
-            // top/bottom faces use capTexture so they don't show as walls
-            // even though, post-CSG, those interior faces aren't visible.
-            var zSplit = zBottom + splitHeight!.Value;
+            // create T-junctions and there are no leaks).
             var lower = BrushFactory.MakeVerticalPrism(
                 footprint, zBottom, zSplit,
                 sideTexture: sideTexture,
