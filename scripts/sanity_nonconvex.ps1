@@ -134,7 +134,7 @@ $L = @(
     @(4000,4500), @(3500,4500)
 )
 Write-Host "--- L-shape uniform floor (6 verts) ---" -ForegroundColor Cyan
-$ok1 = Run-Case "Lshape" (Make-Proj -Verts $L -HeightCells 64) -MaxBrushes 12 -ExpectMaxStartZ 72
+$ok1 = Run-Case "Lshape" (Make-Proj -Verts $L -HeightCells 64) -MaxBrushes 18 -ExpectMaxStartZ 72
 
 # U-shape (8 verts CCW):
 #  ___________
@@ -149,7 +149,7 @@ $U = @(
     @(4200,3500), @(4500,3500), @(4500,4500), @(3500,4500)
 )
 Write-Host "--- U-shape uniform floor (8 verts) ---" -ForegroundColor Cyan
-$ok2 = Run-Case "Ushape" (Make-Proj -Verts $U -HeightCells 64) -MaxBrushes 16 -ExpectMaxStartZ 72
+$ok2 = Run-Case "Ushape" (Make-Proj -Verts $U -HeightCells 64) -MaxBrushes 24 -ExpectMaxStartZ 72
 
 # Spiral with varying heights: 12-vert spiral; height = paint based on how
 # far along the spiral arm you are.

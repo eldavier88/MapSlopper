@@ -107,7 +107,9 @@ public static class GeometryGenerator
         var walls = WallGenerator.Generate(
             poly, project.WallThickness, WallBottomFor, wallTop,
             sideTexture: project.WallTexture,
-            capTexture: project.WallTexture);
+            capTexture: project.WallTexture,
+            splitHeight: project.WallSplitHeight ?? project.CeilingHeight,
+            upperSideTexture: project.WindowTexture);
         ws.Brushes.AddRange(walls);
 
         if (ws.Brushes.Count == 0)

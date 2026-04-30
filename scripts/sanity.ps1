@@ -56,10 +56,13 @@ function Make-Proj {
 }
 
 $cases = @(
-    @{ N = 3;  Expected = 5  },
-    @{ N = 4;  Expected = 6  },
-    @{ N = 6;  Expected = 8  },
-    @{ N = 10; Expected = 12 }
+    # Expected brush count = 1 floor + 1 ceiling + 2*N walls (each wall is
+    # split horizontally because the wall height exceeds the default
+    # CeilingHeight split threshold; the upper half gets the window shader).
+    @{ N = 3;  Expected = 8  },
+    @{ N = 4;  Expected = 10 },
+    @{ N = 6;  Expected = 14 },
+    @{ N = 10; Expected = 22 }
 )
 
 $allOk = $true

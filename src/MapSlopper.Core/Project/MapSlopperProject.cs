@@ -51,6 +51,26 @@ public sealed class MapSlopperProject
     public string WallTexture { get; set; } = "random/wall";
     public string CeilingTexture { get; set; } = "random/ceiling";
 
+    /// <summary>
+    /// Texture used for the upper half of walls that exceed
+    /// <see cref="WallSplitHeight"/>. When a wall would be taller than that
+    /// limit (measured upward from its bottom Z), it is split horizontally
+    /// at <c>bottom + WallSplitHeight</c>: the lower brush keeps
+    /// <see cref="WallTexture"/>, the upper brush uses this texture.
+    /// Defaults to MapSlopper's bundled <c>random/window</c> shader.
+    /// </summary>
+    public string WindowTexture { get; set; } = "random/window";
+
+    /// <summary>
+    /// Maximum wall height (game units, measured from the wall's bottom Z
+    /// to its top) before the wall brush is horizontally split for
+    /// window-texturing the upper half. <c>null</c> (the default) means
+    /// "use <see cref="CeilingHeight"/>" — i.e. matches the default
+    /// floor-to-ceiling clearance, so any wall whose visible height exceeds
+    /// the standard ceiling offset gets a window strip on top.
+    /// </summary>
+    public double? WallSplitHeight { get; set; }
+
     /// <summary>If set, used as info_player_start origin instead of polygon centroid.</summary>
     public Vec3? PlayerStartOverride { get; set; }
 

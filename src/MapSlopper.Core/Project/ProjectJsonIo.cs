@@ -282,6 +282,12 @@ internal sealed class MapSlopperProjectConverter : JsonConverter<MapSlopperProje
                 case "floorTexture": p.FloorTexture = reader.GetString() ?? p.FloorTexture; break;
                 case "wallTexture": p.WallTexture = reader.GetString() ?? p.WallTexture; break;
                 case "ceilingTexture": p.CeilingTexture = reader.GetString() ?? p.CeilingTexture; break;
+                case "windowTexture": p.WindowTexture = reader.GetString() ?? p.WindowTexture; break;
+                case "wallSplitHeight":
+                    p.WallSplitHeight = reader.TokenType == JsonTokenType.Null
+                        ? null
+                        : reader.GetDouble();
+                    break;
                 case "playerStartOverride":
                     p.PlayerStartOverride = reader.TokenType == JsonTokenType.Null
                         ? null
@@ -316,6 +322,10 @@ internal sealed class MapSlopperProjectConverter : JsonConverter<MapSlopperProje
         w.WriteString("floorTexture", p.FloorTexture);
         w.WriteString("wallTexture", p.WallTexture);
         w.WriteString("ceilingTexture", p.CeilingTexture);
+        w.WriteString("windowTexture", p.WindowTexture);
+        w.WritePropertyName("wallSplitHeight");
+        if (p.WallSplitHeight is null) w.WriteNullValue();
+        else w.WriteNumberValue(p.WallSplitHeight.Value);
         w.WritePropertyName("playerStartOverride");
         if (p.PlayerStartOverride is null) w.WriteNullValue();
         else JsonSerializer.Serialize(w, p.PlayerStartOverride.Value, o);

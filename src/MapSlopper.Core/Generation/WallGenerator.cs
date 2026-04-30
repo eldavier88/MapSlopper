@@ -23,7 +23,7 @@ public static class WallGenerator
     public static IReadOnlyList<Brush> Generate(
         Polygon2D ccwPolygon, double thickness, double zBottom, double zTop,
         string sideTexture, string capTexture)
-        => GenerateInternal(ccwPolygon, thickness, _ => zBottom, zTop, sideTexture, capTexture);
+        => GenerateInternal(ccwPolygon, thickness, _ => zBottom, zTop, sideTexture, capTexture, null, null);
 
     /// <summary>
     /// Per-edge overload: <paramref name="zBottomForEdge"/> is invoked once
@@ -35,11 +35,32 @@ public static class WallGenerator
     public static IReadOnlyList<Brush> Generate(
         Polygon2D ccwPolygon, double thickness, Func<int, double> zBottomForEdge, double zTop,
         string sideTexture, string capTexture)
-        => GenerateInternal(ccwPolygon, thickness, zBottomForEdge, zTop, sideTexture, capTexture);
+        => GenerateInternal(ccwPolygon, thickness, zBottomForEdge, zTop, sideTexture, capTexture, null, null);
+
+    /// <summary>
+    /// Per-edge overload with optional horizontal split. When
+    /// <paramref name="splitHeight"/> is positive AND a wall's visible
+    /// height (zTop - zBottomForEdge(i)) exceeds it, the wall is emitted as
+    /// two stacked airtight prisms sharing a Z plane at
+    /// <c>zBottom + splitHeight</c>. The lower brush is textured with
+    /// <paramref name="sideTexture"/>; the upper brush with
+    /// <paramref name="upperSideTexture"/> (the "window" texture). Caps
+    /// (top/bottom) always use <paramref name="capTexture"/>; the shared
+    /// internal plane is also <paramref name="capTexture"/> so the two
+    /// brushes occupy adjacent volume with no T-junctions on the seam.
+    /// Walls shorter than <paramref name="splitHeight"/> stay as a single
+    /// brush.
+    /// </summary>
+    public static IReadOnlyList<Brush> Generate(
+        Polygon2D ccwPolygon, double thickness, Func<int, double> zBottomForEdge, double zTop,
+        string sideTexture, string capTexture,
+        double? splitHeight, string? upperSideTexture)
+        => GenerateInternal(ccwPolygon, thickness, zBottomForEdge, zTop, sideTexture, capTexture, splitHeight, upperSideTexture);
 
     private static IReadOnlyList<Brush> GenerateInternal(
         Polygon2D ccwPolygon, double thickness, Func<int, double> zBottomForEdge, double zTop,
-        string sideTexture, string capTexture)
+        string sideTexture, string capTexture,
+        double? splitHeight, string? upperSideTexture)
     {
         if (!ccwPolygon.IsCcw())
             throw new ArgumentException("Polygon must be CCW.", nameof(ccwPolygon));
@@ -104,12 +125,41 @@ public static class WallGenerator
             var zBottom = zBottomForEdge(i);
             if (zTop <= zBottom) continue; // skip degenerate
 
-            var prism = BrushFactory.MakeVerticalPrism(
-                footprint, zBottom, zTop,
+            var wallHeight = zTop - zBottom;
+            var doSplit = splitHeight.HasValue
+                          && splitHeight.Value > 0
+                          && upperSideTexture is not null
+                          && wallHeight > splitHeight.Value + 1e-6; // ignore sub-unit float slop
+
+            if (!doSplit)
+            {
+                var prism = BrushFactory.MakeVerticalPrism(
+                    footprint, zBottom, zTop,
+                    sideTexture: sideTexture,
+                    topTexture: capTexture,
+                    bottomTexture: capTexture);
+                brushes.Add(prism);
+                continue;
+            }
+
+            // Split at a shared Z plane. Both brushes use the same XY
+            // footprint so the seam is a perfect plane match (q3map2 won't
+            // create T-junctions and there are no leaks). The internal
+            // top/bottom faces use capTexture so they don't show as walls
+            // even though, post-CSG, those interior faces aren't visible.
+            var zSplit = zBottom + splitHeight!.Value;
+            var lower = BrushFactory.MakeVerticalPrism(
+                footprint, zBottom, zSplit,
                 sideTexture: sideTexture,
                 topTexture: capTexture,
                 bottomTexture: capTexture);
-            brushes.Add(prism);
+            var upper = BrushFactory.MakeVerticalPrism(
+                footprint, zSplit, zTop,
+                sideTexture: upperSideTexture!,
+                topTexture: capTexture,
+                bottomTexture: capTexture);
+            brushes.Add(lower);
+            brushes.Add(upper);
         }
         return brushes;
     }

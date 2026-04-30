@@ -48,3 +48,23 @@ textures/random/ceiling
         rgbGen identity
     }
 }
+
+// Window strip used for the upper half of tall walls (above
+// MapSlopperProject.WallSplitHeight). Slightly emissive blue tint with a
+// q3map_surfacelight so split-walls cast soft daylight into the room.
+textures/random/window
+{
+    qer_editorimage textures/random/window.tga
+    surfaceparm nomarks
+    q3map_surfacelight 80
+    q3map_lightsubdivide 128
+    {
+        map $whiteimage
+        rgbGen const ( 0.55 0.70 0.95 )
+    }
+    {
+        map $lightmap
+        blendFunc filter
+        rgbGen identity
+    }
+}
