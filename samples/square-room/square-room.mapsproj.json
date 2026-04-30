@@ -1,0 +1,35 @@
+{
+  "formatVersion": 1,
+  "ceilingHeight": 256,
+  "wallThickness": 16,
+  "ceilingThickness": 16,
+  "floorBaseThickness": 16,
+  "floorTexture": "common/caulk",
+  "wallTexture": "common/caulk",
+  "ceilingTexture": "common/caulk",
+  "lightSpacing": 800,
+  "lightIntensity": 300,
+  "lightInsetFromCeiling": 16,
+  "outline": {
+    "points": [
+      { "id": "11111111-1111-1111-1111-111111111111", "x": 0, "y": 0 },
+      { "id": "22222222-2222-2222-2222-222222222222", "x": 256, "y": 0 },
+      { "id": "33333333-3333-3333-3333-333333333333", "x": 256, "y": 256 },
+      { "id": "44444444-4444-4444-4444-444444444444", "x": 0, "y": 256 }
+    ],
+    "edges": [
+      { "a": "11111111-1111-1111-1111-111111111111", "b": "22222222-2222-2222-2222-222222222222" },
+      { "a": "22222222-2222-2222-2222-222222222222", "b": "33333333-3333-3333-3333-333333333333" },
+      { "a": "33333333-3333-3333-3333-333333333333", "b": "44444444-4444-4444-4444-444444444444" },
+      { "a": "44444444-4444-4444-4444-444444444444", "b": "11111111-1111-1111-1111-111111111111" }
+    ]
+  },
+  "heightmap": {
+    "width": 8,
+    "height": 8,
+    "cellSize": 32,
+    "originX": 0,
+    "originY": 0,
+    "dataBase64": "QABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQAA="
+  }
+}
