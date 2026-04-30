@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MapSlopper.Cli/MapSlopper.Cli.csproj" />
+    <Project Path="src/MapSlopper.Core/MapSlopper.Core.csproj" />
+    <Project Path="src/MapSlopper.Gui/MapSlopper.Gui.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MapSlopper.Core.Tests/MapSlopper.Core.Tests.csproj" />
+    <Project Path="tests/MapSlopper.Integration.Tests/MapSlopper.Integration.Tests.csproj" />
+  </Folder>
+</Solution>

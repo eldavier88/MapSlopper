@@ -1,0 +1,33 @@
+# .NET
+bin/
+obj/
+out/
+*.user
+*.suo
+.vs/
+.vscode/
+*.swp
+.idea/
+
+# Build artifacts
+[Bb]uild/
+[Pp]ublish/
+TestResults/
+*.coverage
+*.coveragexml
+coverage*/
+
+# Tooling
+.dotnet/
+.nuget/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Tool output
+*.log
+*.tmp
+
+# Generated maps in scratch dirs
+scratch/
