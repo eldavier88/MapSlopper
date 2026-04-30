@@ -49,6 +49,10 @@
             <MenuItem Header="_View">
                 <MenuItem Name="MenuLevels" Header="_Levels..." />
                 <MenuItem Name="MenuFrame" Header="_Frame Project" InputGesture="F" />
+                <Separator />
+                <MenuItem Name="MenuAddAssetRoot" Header="Add Asset _Root..." />
+                <MenuItem Name="MenuAddAssetPk3" Header="Add Asset .pk_3..." />
+                <MenuItem Name="MenuClearAssetRoots" Header="_Clear Asset Roots" />
             </MenuItem>
             <MenuItem Header="_Help">
                 <MenuItem Name="MenuAbout" Header="_About" />

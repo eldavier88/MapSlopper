@@ -84,4 +84,15 @@ public sealed class MapSlopperProject
 
     /// <summary>Vertical thickness of the floor "slab" (always at and below Z=0).</summary>
     public double FloorBaseThickness { get; set; } = 16.0;
+
+    /// <summary>
+    /// Asset roots used by the 3D preview to resolve texture / shader
+    /// names to actual image bytes. Each entry is either a directory tree
+    /// (mounted like Q3's <c>fs_basepath/baseq3</c>) or a <c>.pk3</c> zip
+    /// file. Order matters: earlier roots win on duplicate paths, matching
+    /// Q3's filesystem precedence. Empty list = preview falls back to flat
+    /// per-face colors. Saved with the project so opening it again
+    /// restores the same look.
+    /// </summary>
+    public System.Collections.Generic.List<string> AssetRoots { get; set; } = new();
 }

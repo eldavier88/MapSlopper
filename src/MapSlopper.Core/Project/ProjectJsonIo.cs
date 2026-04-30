@@ -298,6 +298,20 @@ internal sealed class MapSlopperProjectConverter : JsonConverter<MapSlopperProje
                 case "lightInsetFromCeiling": p.LightInsetFromCeiling = reader.GetDouble(); break;
                 case "ceilingThickness": p.CeilingThickness = reader.GetDouble(); break;
                 case "floorBaseThickness": p.FloorBaseThickness = reader.GetDouble(); break;
+                case "assetRoots":
+                    p.AssetRoots = new List<string>();
+                    if (reader.TokenType == JsonTokenType.StartArray)
+                    {
+                        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+                        {
+                            if (reader.TokenType == JsonTokenType.String)
+                            {
+                                var s = reader.GetString();
+                                if (!string.IsNullOrWhiteSpace(s)) p.AssetRoots.Add(s!);
+                            }
+                        }
+                    }
+                    break;
                 default: reader.Skip(); break;
             }
         }
@@ -334,6 +348,9 @@ internal sealed class MapSlopperProjectConverter : JsonConverter<MapSlopperProje
         w.WriteNumber("lightInsetFromCeiling", p.LightInsetFromCeiling);
         w.WriteNumber("ceilingThickness", p.CeilingThickness);
         w.WriteNumber("floorBaseThickness", p.FloorBaseThickness);
+        w.WriteStartArray("assetRoots");
+        foreach (var r in p.AssetRoots) w.WriteStringValue(r);
+        w.WriteEndArray();
         w.WriteEndObject();
     }
 }

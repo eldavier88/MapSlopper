@@ -1,27 +1,39 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
+using MapSlopper.Core.Assets;
 using MapSlopper.Core.Brushes;
 using MapSlopper.Core.Generation;
 using MapSlopper.Core.Geometry;
+using MapSlopper.Gui.Preview;
 using CoreBrush = MapSlopper.Core.Brushes.Brush;
 
 namespace MapSlopper.Gui;
 
 /// <summary>
-/// Software-rasterized 3D preview of the generated brushes. Uses a perspective
-/// projection with painter's-algorithm depth sort and per-face Lambertian
-/// shading. Camera is first-person: WASD strafes, QE elevates, mouse-look on
-/// right-button drag, scroll adjusts move speed. Camera state persists for the
-/// lifetime of the control instance.
+/// In-game-style 3D preview. Renders the generated map brushes via a tiny
+/// software rasterizer with a real Z-buffer, near-plane clipping in
+/// camera space, and perspective-correct texture mapping. Texture pixels
+/// are loaded from the project's user-supplied asset roots
+/// (directories or <c>.pk3</c> files), parsed via <see cref="AssetLibrary"/>
+/// — so the user sees the actual game shaders/textures the same way they
+/// would in spectator mode.
 ///
-/// Rebuilds geometry from the project on a 100 ms debounce so editing in the
-/// 2D pane updates the preview without thrashing the generator on every
-/// stroke.
+/// Camera is first-person (WASD strafes, QE elevates, mouse-look on
+/// right-button drag, scroll adjusts move speed, F frames the level).
+/// Geometry rebuilds 100 ms after edits; the visible framebuffer
+/// re-renders every 16 ms regardless so the camera moves smoothly even
+/// while edits are queued. When no asset roots are configured the preview
+/// still works — faces fall back to a flat per-orientation tint, which
+/// also kicks in for shaders the loaded roots don't provide.
 /// </summary>
 public sealed class Preview3DControl : Control
 {
@@ -32,12 +44,11 @@ public sealed class Preview3DControl : Control
     // Camera
     private Vec3 _camPos = new(-200, -200, 200);
     private Vec3 _camVel = Vec3.Zero;
-    private double _yaw = 0.6;     // radians, around world Z (up)
-    private double _pitch = -0.4;  // radians, 0 = horizontal
+    private double _yaw = 0.6;
+    private double _pitch = -0.4;
     private double _moveSpeed = 200.0;
-    private const double FovY = Math.PI / 3; // 60°
+    private const double FovY = Math.PI / 3;
     private const double NearZ = 1.0;
-    /// <summary>Acceleration toward target velocity (1/s). Larger = snappier.</summary>
     private const double Damping = 8.0;
 
     // Input state
@@ -49,13 +60,30 @@ public sealed class Preview3DControl : Control
     // Cached triangulated faces from the most recent project rebuild.
     private readonly List<Face> _faces = new();
     private string _statusLine = "3D preview \u2014 close a polygon to see geometry.";
+    private string _assetStatus = "no assets";
     private bool _hasAutoFramed;
     private (Vec3 min, Vec3 max)? _bounds;
+
+    // Asset pipeline
+    private AssetLibrary _assets = AssetLibrary.Load(Array.Empty<string>());
+    private TextureCache _textures;
+    private readonly List<string> _lastAssetRoots = new();
+
+    // Rasterizer + framebuffer surface.
+    private readonly SoftwareRasterizer _raster = new();
+    // Internal render target. We render at the control's pixel size,
+    // capped to keep CPU cost bounded; the framebuffer is then stretched
+    // 1:1 (or up-scaled) by Avalonia when DrawImage is called.
+    private const int MaxRenderWidth = 1280;
+    private const int MaxRenderHeight = 800;
+    private WriteableBitmap? _backbuffer;
+    private int _bbW, _bbH;
 
     public Preview3DControl()
     {
         Focusable = true;
         ClipToBounds = true;
+        _textures = new TextureCache(_assets);
         _rebuildTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, OnRebuildTick);
         _rebuildTimer.Stop();
         _renderTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Background, OnRenderTick);
@@ -74,6 +102,7 @@ public sealed class Preview3DControl : Control
         _vm.Project.Outline.Changed += ScheduleRebuild;
         _vm.Project.Heightmap.Changed += ScheduleRebuild;
         _vm.PropertyChanged += OnVmPropertyChanged;
+        ReloadAssetsIfChanged();
         ScheduleRebuild();
     }
 
@@ -81,12 +110,45 @@ public sealed class Preview3DControl : Control
     {
         if (e.PropertyName == nameof(EditorViewModel.Project))
         {
-            // Project replaced (after Open/New). Re-subscribe.
             if (_vm is null) return;
             _vm.Project.Outline.Changed += ScheduleRebuild;
             _vm.Project.Heightmap.Changed += ScheduleRebuild;
+            ReloadAssetsIfChanged();
             ScheduleRebuild();
         }
+    }
+
+    /// <summary>
+    /// Force the preview to re-scan its asset roots. Call after the user
+    /// adds/removes a root from the View menu.
+    /// </summary>
+    public void ReloadAssets()
+    {
+        if (_vm is null) return;
+        _assets = AssetLibrary.Load(_vm.Project.AssetRoots);
+        _textures = new TextureCache(_assets);
+        _lastAssetRoots.Clear();
+        _lastAssetRoots.AddRange(_vm.Project.AssetRoots);
+        _assetStatus = _assets.RootDescriptions.Count == 0
+            ? "no asset roots (add via View menu)"
+            : $"{_assets.RootDescriptions.Count} root(s), {_assets.ShaderCount} shaders";
+        InvalidateVisual();
+    }
+
+    private void ReloadAssetsIfChanged()
+    {
+        if (_vm is null) return;
+        var cur = _vm.Project.AssetRoots;
+        var changed = cur.Count != _lastAssetRoots.Count;
+        if (!changed)
+        {
+            for (var i = 0; i < cur.Count; i++)
+            {
+                if (!string.Equals(cur[i], _lastAssetRoots[i], StringComparison.OrdinalIgnoreCase))
+                { changed = true; break; }
+            }
+        }
+        if (changed) ReloadAssets();
     }
 
     private void ScheduleRebuild()
@@ -138,8 +200,8 @@ public sealed class Preview3DControl : Control
                 }
             }
             _statusLine = brushCount == 0
-                ? "3D preview: polygon closed but no brushes generated. Paint the heightmap to add floors, or check warnings on Export."
-                : $"{brushCount} brushes \u2022 {_faces.Count} tris";
+                ? "3D preview: polygon closed but no brushes generated. Paint the heightmap to add floors."
+                : $"{brushCount} brushes \u2022 {_faces.Count} tris \u2022 {_assetStatus}";
         }
         catch (Exception ex)
         {
@@ -164,11 +226,9 @@ public sealed class Preview3DControl : Control
         var size = max - min;
         var radius = Math.Max(size.X, Math.Max(size.Y, size.Z));
         if (radius < 1) radius = 256;
-        // Place camera back along -X-Y diagonal at ~1.5x radius, slightly elevated.
         var dist = radius * 1.5;
         var dir = new Vec3(-1, -1, 0).Normalized;
         _camPos = new Vec3(center.X + dir.X * dist, center.Y + dir.Y * dist, center.Z + radius * 0.6);
-        // Look toward center.
         var look = (center - _camPos).Normalized;
         _yaw = Math.Atan2(look.Y, look.X);
         _pitch = Math.Asin(Math.Clamp(look.Z, -1, 1));
@@ -180,11 +240,6 @@ public sealed class Preview3DControl : Control
         if (_bounds is { } b) FrameBounds(b.min, b.max);
     }
 
-    /// <summary>
-    /// Spawn the camera *inside* the level at the info_player_start origin
-    /// (eye height ~ 56) facing roughly toward the polygon centroid.
-    /// Falls back to FrameBounds when no player_start is found.
-    /// </summary>
     private void SpawnAtPlayerStart(MapDocument doc, Vec3 bMin, Vec3 bMax)
     {
         Vec3? origin = null;
@@ -197,23 +252,21 @@ public sealed class Preview3DControl : Control
             {
                 var parts = ostr.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length == 3
-                    && double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ox)
-                    && double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var oy)
-                    && double.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var oz))
+                    && double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var ox)
+                    && double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var oy)
+                    && double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var oz))
                 {
                     origin = new Vec3(ox, oy, oz);
                 }
             }
             if (ent.Properties.TryGetValue("angle", out var astr)
-                && double.TryParse(astr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ang))
+                && double.TryParse(astr, NumberStyles.Float, CultureInfo.InvariantCulture, out var ang))
             {
                 yawDeg = ang;
             }
             break;
         }
         if (origin is null) { FrameBounds(bMin, bMax); return; }
-        // Eye height: Q3 player_start is at feet level + 24 by our placement.
-        // Add 32 more to roughly match a 56-unit eye height.
         _camPos = new Vec3(origin.Value.X, origin.Value.Y, origin.Value.Z + 32);
         _camVel = Vec3.Zero;
         _yaw = yawDeg * Math.PI / 180.0;
@@ -230,15 +283,21 @@ public sealed class Preview3DControl : Control
 
     private void AddBrushFaces(CoreBrush brush)
     {
-        // For preview we triangulate each plane's intersection polygon with the brush.
-        // This is identical to BSP face generation: each face = the plane's polygon
-        // bounded by all OTHER planes' half-spaces. We compute it here once at rebuild.
-        var poly = BrushFaceBuilder.BuildFace(brush);
-        foreach (var (verts, color) in poly)
+        var built = BrushFaceBuilder.BuildFaces(brush);
+        foreach (var f in built)
         {
+            var verts = f.Verts;
+            var uvs = f.Uvs;
             if (verts.Count < 3) continue;
+            // Fan-triangulate. Convex brush faces are always convex so a
+            // simple fan from vertex 0 is correct.
             for (var i = 1; i < verts.Count - 1; i++)
-                _faces.Add(new Face(verts[0], verts[i], verts[i + 1], color));
+            {
+                _faces.Add(new Face(
+                    verts[0], verts[i], verts[i + 1],
+                    uvs[0], uvs[i], uvs[i + 1],
+                    f.TextureName, f.FallbackR, f.FallbackG, f.FallbackB));
+            }
         }
     }
 
@@ -254,8 +313,6 @@ public sealed class Preview3DControl : Control
     private void UpdateCamera(double dt)
     {
         if (dt <= 0) return;
-        // Camera-relative basis: forward follows pitch so looking down + W
-        // dives down. Right is purely horizontal so strafing stays level.
         var forward = new Vec3(
             Math.Cos(_yaw) * Math.Cos(_pitch),
             Math.Sin(_yaw) * Math.Cos(_pitch),
@@ -263,8 +320,6 @@ public sealed class Preview3DControl : Control
         var right = new Vec3(Math.Sin(_yaw), -Math.Cos(_yaw), 0);
         var up = new Vec3(0, 0, 1);
 
-        // Build target velocity from input (accumulated, normalised so
-        // diagonal isn't faster).
         var input = Vec3.Zero;
         if (_keysDown.Contains(Key.W)) input += forward;
         if (_keysDown.Contains(Key.S)) input -= forward;
@@ -276,7 +331,6 @@ public sealed class Preview3DControl : Control
         if (len > 1e-6) input /= len;
         var target = input * _moveSpeed;
 
-        // Exponential smoothing toward target velocity (spaceship drift feel).
         var alpha = 1 - Math.Exp(-Damping * dt);
         _camVel += (target - _camVel) * alpha;
         _camPos += _camVel * dt;
@@ -343,96 +397,178 @@ public sealed class Preview3DControl : Control
     public override void Render(DrawingContext context)
     {
         var bounds = Bounds;
-        context.FillRectangle(new SolidColorBrush(Color.FromRgb(20, 24, 32)), new Rect(bounds.Size));
+        // Pick framebuffer size: native pixel size of the control, capped
+        // to a sane maximum so resizing the window doesn't grind the CPU.
+        var targetW = Math.Max(1, Math.Min(MaxRenderWidth, (int)bounds.Width));
+        var targetH = Math.Max(1, Math.Min(MaxRenderHeight, (int)bounds.Height));
+        EnsureBackbuffer(targetW, targetH);
 
         if (_faces.Count == 0)
         {
+            context.FillRectangle(new SolidColorBrush(Color.FromRgb(20, 24, 32)), new Rect(bounds.Size));
+            var help =
+                _statusLine + "\n"
+                + "Right-drag = look, WASD = move, QE = up/down, F = frame, scroll = speed\n"
+                + "Tip: View → Add Asset Root... to point at a baseq3/ folder or .pk3 for textures.";
             var fmt = new FormattedText(
-                _statusLine + "\nRight-drag = look, WASD = move, QE = up/down, F = frame, scroll = speed",
-                Typeface.Default, 14, TextAlignment.Left, TextWrapping.Wrap, new Size(bounds.Width - 40, bounds.Height));
+                help, Typeface.Default, 14, TextAlignment.Left, TextWrapping.Wrap,
+                new Size(bounds.Width - 40, bounds.Height));
             context.DrawText(Brushes.LightGray, new Point(20, 20), fmt);
             return;
         }
 
-        // Camera basis: forward includes pitch, right is purely horizontal,
-        // up is right × forward (so it tilts with pitch the way a head does).
-        // Camera-space coords: (x = right component, y = up component,
-        // z = forward component). Points are visible when z > NearZ.
+        // Camera basis.
         var forwardVec = new Vec3(
             Math.Cos(_yaw) * Math.Cos(_pitch),
             Math.Sin(_yaw) * Math.Cos(_pitch),
             Math.Sin(_pitch));
         var rightVec = new Vec3(Math.Sin(_yaw), -Math.Cos(_yaw), 0);
         var upVec = Vec3.Cross(rightVec, forwardVec);
-        var fovScale = 0.5 * bounds.Height / Math.Tan(FovY * 0.5);
 
-        // Project all faces, depth-sort back-to-front, draw filled with simple shading.
-        var projected = new List<(Point P1, Point P2, Point P3, double Depth, Color Color)>(_faces.Count);
+        // Clear framebuffer (sky-blue-tinted background).
+        _raster.Resize(_bbW, _bbH);
+        _raster.Clear(0xFF14181Eu);
+
+        var fovScale = 0.5 * _bbH / Math.Tan(FovY * 0.5);
+        var halfW = _bbW * 0.5;
+        var halfH = _bbH * 0.5;
+
+        // Single hard-coded directional light. Keep the same direction the
+        // old preview used so visual identity is preserved when assets are
+        // missing. Two-sided lighting because BrushFaceBuilder's winding
+        // isn't reliably outward.
         var light = new Vec3(0.3, 0.5, 0.8).Normalized;
+        var trianglesDrawn = 0;
+
+        // Allocate small buffers reused by clipper to avoid GC churn.
+        Span<CamVtx> inBuf = stackalloc CamVtx[4];
+        Span<CamVtx> outBuf = stackalloc CamVtx[8];
+        // Reuse one projected-vertex buffer per face. Maximum is 8 because
+        // a triangle clipped against one plane in camera space can produce
+        // at most 4 vertices, but downstream clipping (none here) could
+        // push it higher. Allocated once outside the foreach to avoid a
+        // CA2014 stack-overflow risk on huge brush counts.
+        Span<SoftwareRasterizer.Vertex> proj = stackalloc SoftwareRasterizer.Vertex[8];
+
         foreach (var face in _faces)
         {
-            var ca = ToCameraSpace(face.A, rightVec, upVec, forwardVec);
-            var cb = ToCameraSpace(face.B, rightVec, upVec, forwardVec);
-            var cc = ToCameraSpace(face.C, rightVec, upVec, forwardVec);
-            // Reject triangles entirely behind the near plane. (Partial
-            // clipping would be ideal but isn't critical for a preview.)
+            // Camera space.
+            var ca = ToCamera(face.A, rightVec, upVec, forwardVec);
+            var cb = ToCamera(face.B, rightVec, upVec, forwardVec);
+            var cc = ToCamera(face.C, rightVec, upVec, forwardVec);
+
+            // Trivial reject: all behind near.
             if (ca.Z < NearZ && cb.Z < NearZ && cc.Z < NearZ) continue;
-            // If any vertex is behind near plane, skip — avoids the spike
-            // artifacts a true software clipper would otherwise need.
-            if (ca.Z < NearZ || cb.Z < NearZ || cc.Z < NearZ) continue;
 
-            var a = ProjectCam(ca, fovScale, bounds);
-            var b = ProjectCam(cb, fovScale, bounds);
-            var c = ProjectCam(cc, fovScale, bounds);
-
-            // No back-face culling: BrushFaceBuilder uses Q3 CW-from-outside
-            // winding so a single global rule misclassifies half the faces.
-            // Two-sided Lambert below handles shading; painter's-algorithm
-            // sort handles overlap.
-
-            var avgDepth = (ca.Z + cb.Z + cc.Z) / 3.0;
-
+            // Lambert (two-sided so we don't need to know face winding).
             var n = Vec3.Cross(face.B - face.A, face.C - face.A);
             var nLen = n.Length;
             if (nLen < 1e-9) continue;
             n /= nLen;
-            var diffuse = 0.25 + 0.75 * Math.Abs(Vec3.Dot(n, light));
-            var shaded = Color.FromRgb(
-                (byte)Math.Clamp(face.Color.R * diffuse, 0, 255),
-                (byte)Math.Clamp(face.Color.G * diffuse, 0, 255),
-                (byte)Math.Clamp(face.Color.B * diffuse, 0, 255));
+            var lambert = (float)(0.25 + 0.75 * Math.Abs(Vec3.Dot(n, light)));
 
-            projected.Add((a, b, c, avgDepth, shaded));
+            // Texture lookup (cached).
+            var tex = _textures.Get(face.TextureName);
+            if (tex is { IsEmissive: true }) lambert = 1.25f; // emissive override
+
+            inBuf[0] = new CamVtx(ca, face.UvA);
+            inBuf[1] = new CamVtx(cb, face.UvB);
+            inBuf[2] = new CamVtx(cc, face.UvC);
+            var inCount = 3;
+
+            // Near-plane clip.
+            inCount = ClipNear(inBuf, inCount, outBuf);
+            if (inCount < 3) continue;
+
+            // Project clipped polygon, fan-triangulate, rasterize.
+            for (var i = 0; i < inCount; i++)
+            {
+                var v = outBuf[i];
+                var invZ = 1.0 / v.Pos.Z;
+                var sx = (float)(halfW + v.Pos.X * invZ * fovScale);
+                var sy = (float)(halfH - v.Pos.Y * invZ * fovScale);
+                proj[i] = new SoftwareRasterizer.Vertex(
+                    sx, sy,
+                    (float)invZ,
+                    (float)(v.U * invZ),
+                    (float)(v.V * invZ));
+            }
+            for (var i = 1; i < inCount - 1; i++)
+            {
+                _raster.DrawTriangle(
+                    proj[0], proj[i], proj[i + 1],
+                    tex?.Rgba, tex?.Width ?? 0, tex?.Height ?? 0,
+                    lambert,
+                    face.FallbackR, face.FallbackG, face.FallbackB);
+                trianglesDrawn++;
+            }
         }
 
-        projected.Sort((x, y) => y.Depth.CompareTo(x.Depth));
-        var edgePen = new Pen(new SolidColorBrush(Color.FromArgb(80, 0, 0, 0)), 0.5);
-        foreach (var (p1, p2, p3, _, color) in projected)
+        // Blit framebuffer to bitmap.
+        BlitToBitmap();
+        if (_backbuffer is not null)
         {
-            var fill = new SolidColorBrush(color);
-            var fig = new PathFigure { StartPoint = p1, IsClosed = true };
-            fig.Segments!.Add(new LineSegment { Point = p2 });
-            fig.Segments!.Add(new LineSegment { Point = p3 });
-            var geo = new PathGeometry();
-            geo.Figures!.Add(fig);
-            context.DrawGeometry(fill, edgePen, geo);
+            context.DrawImage(_backbuffer, new Rect(0, 0, _bbW, _bbH), new Rect(bounds.Size));
         }
 
-        // HUD
+        // HUD.
         var hud = new FormattedText(
-            $"pos {_camPos.X:0}, {_camPos.Y:0}, {_camPos.Z:0}   yaw {(_yaw * 180 / Math.PI):0}°   pitch {(_pitch * 180 / Math.PI):0}°   speed {_moveSpeed:0}/s   tris {projected.Count}",
+            $"pos {_camPos.X:0}, {_camPos.Y:0}, {_camPos.Z:0}   yaw {(_yaw * 180 / Math.PI):0}°   "
+            + $"pitch {(_pitch * 180 / Math.PI):0}°   speed {_moveSpeed:0}/s   tris {trianglesDrawn}   "
+            + $"fb {_bbW}x{_bbH}   {_assetStatus}",
             Typeface.Default, 12, TextAlignment.Left, TextWrapping.NoWrap, bounds.Size);
         context.DrawText(Brushes.LightGray, new Point(8, bounds.Height - 20), hud);
     }
 
-    private static Point ProjectCam(Vec3 cam, double fovScale, Rect bounds)
+    private void EnsureBackbuffer(int w, int h)
     {
-        var sx = bounds.Width * 0.5 + (cam.X / cam.Z) * fovScale;
-        var sy = bounds.Height * 0.5 - (cam.Y / cam.Z) * fovScale;
-        return new Point(sx, sy);
+        if (_backbuffer is not null && _bbW == w && _bbH == h) return;
+        _backbuffer?.Dispose();
+        _backbuffer = new WriteableBitmap(
+            new PixelSize(w, h), new Vector(96, 96),
+            PixelFormat.Bgra8888, AlphaFormat.Premul);
+        _bbW = w;
+        _bbH = h;
     }
 
-    private Vec3 ToCameraSpace(Vec3 world, Vec3 rightVec, Vec3 upVec, Vec3 forwardVec)
+    private void BlitToBitmap()
+    {
+        if (_backbuffer is null) return;
+        using var fb = _backbuffer.Lock();
+        var src = _raster.Color;
+        var stride = fb.RowBytes;
+        var addr = fb.Address;
+        unsafe
+        {
+            // If row stride matches packed width*4, we can copy in one
+            // shot; otherwise copy row by row to respect the bitmap's
+            // stride. Marshal.Copy(uint[]) doesn't exist, so reinterpret
+            // via fixed pointer.
+            fixed (uint* srcPtr = src)
+            {
+                var srcBytes = (byte*)srcPtr;
+                var dstBytes = (byte*)addr.ToPointer();
+                var rowBytes = _bbW * 4;
+                if (stride == rowBytes)
+                {
+                    Buffer.MemoryCopy(srcBytes, dstBytes, (long)stride * _bbH, (long)rowBytes * _bbH);
+                }
+                else
+                {
+                    for (var y = 0; y < _bbH; y++)
+                    {
+                        Buffer.MemoryCopy(
+                            srcBytes + y * rowBytes,
+                            dstBytes + y * stride,
+                            stride,
+                            rowBytes);
+                    }
+                }
+            }
+        }
+    }
+
+    private Vec3 ToCamera(Vec3 world, Vec3 rightVec, Vec3 upVec, Vec3 forwardVec)
     {
         var rel = world - _camPos;
         return new Vec3(
@@ -441,10 +577,65 @@ public sealed class Preview3DControl : Control
             Vec3.Dot(rel, forwardVec));
     }
 
+    /// <summary>
+    /// Sutherland-Hodgman against the near-Z plane in camera space.
+    /// Output polygon written into <paramref name="output"/>; returns the
+    /// new vertex count. Input is replaced with output's contents (caller
+    /// uses out polygon directly).
+    /// </summary>
+    private static int ClipNear(Span<CamVtx> input, int inCount, Span<CamVtx> output)
+    {
+        var n = 0;
+        for (var i = 0; i < inCount; i++)
+        {
+            var curr = input[i];
+            var prev = input[(i + inCount - 1) % inCount];
+            var currInside = curr.Pos.Z >= NearZ;
+            var prevInside = prev.Pos.Z >= NearZ;
+            if (prevInside ^ currInside)
+            {
+                var t = (NearZ - prev.Pos.Z) / (curr.Pos.Z - prev.Pos.Z);
+                output[n++] = Lerp(prev, curr, t);
+            }
+            if (currInside)
+            {
+                output[n++] = curr;
+            }
+        }
+        // Caller reads from output; copy back into input to keep API
+        // simple isn't necessary because the rasterize loop reads outBuf.
+        return n;
+    }
+
+    private static CamVtx Lerp(CamVtx a, CamVtx b, double t) =>
+        new(
+            new Vec3(
+                a.Pos.X + (b.Pos.X - a.Pos.X) * t,
+                a.Pos.Y + (b.Pos.Y - a.Pos.Y) * t,
+                a.Pos.Z + (b.Pos.Z - a.Pos.Z) * t),
+            a.U + (b.U - a.U) * t,
+            a.V + (b.V - a.V) * t);
+
+    private readonly struct CamVtx
+    {
+        public readonly Vec3 Pos;
+        public readonly double U, V;
+        public CamVtx(Vec3 pos, double u, double v) { Pos = pos; U = u; V = v; }
+        public CamVtx(Vec3 pos, (double U, double V) uv) { Pos = pos; U = uv.U; V = uv.V; }
+    }
+
     private readonly struct Face
     {
         public readonly Vec3 A, B, C;
-        public readonly Color Color;
-        public Face(Vec3 a, Vec3 b, Vec3 c, Color color) { A = a; B = b; C = c; Color = color; }
+        public readonly (double U, double V) UvA, UvB, UvC;
+        public readonly string TextureName;
+        public readonly byte FallbackR, FallbackG, FallbackB;
+        public Face(Vec3 a, Vec3 b, Vec3 c,
+            (double U, double V) ua, (double U, double V) ub, (double U, double V) uc,
+            string tex, byte r, byte g, byte bC)
+        {
+            A = a; B = b; C = c; UvA = ua; UvB = ub; UvC = uc;
+            TextureName = tex; FallbackR = r; FallbackG = g; FallbackB = bC;
+        }
     }
 }

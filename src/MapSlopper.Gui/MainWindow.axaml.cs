@@ -276,6 +276,9 @@ public class MainWindow : Window
         Hook("MenuRedo", _ => _vm.RedoAction());
         Hook("MenuLevels", _ => OpenLevelsWindow());
         Hook("MenuFrame", _ => _canvas.FrameProject());
+        Hook("MenuAddAssetRoot", async _ => await OnAddAssetRootAsync().ConfigureAwait(true));
+        Hook("MenuAddAssetPk3", async _ => await OnAddAssetPk3Async().ConfigureAwait(true));
+        Hook("MenuClearAssetRoots", _ => OnClearAssetRoots());
         Hook("MenuAbout", _ => ShowAbout());
     }
 
@@ -400,6 +403,45 @@ public class MainWindow : Window
             },
         };
         await w.ShowDialog(this).ConfigureAwait(true);
+    }
+
+    private async Task OnAddAssetRootAsync()
+    {
+        var dlg = new OpenFolderDialog { Title = "Choose an asset root folder (e.g. baseq3)" };
+        var picked = await dlg.ShowAsync(this).ConfigureAwait(true);
+        if (string.IsNullOrEmpty(picked)) return;
+        if (_vm.Project.AssetRoots.Contains(picked)) { _vm.StatusMessage = "Asset root already added."; return; }
+        _vm.Project.AssetRoots.Add(picked);
+        _preview.ReloadAssets();
+        _vm.StatusMessage = $"Asset root added: {picked}";
+    }
+
+    private async Task OnAddAssetPk3Async()
+    {
+        var dlg = new OpenFileDialog
+        {
+            Title = "Choose a .pk3 asset archive",
+            AllowMultiple = false,
+            Filters = new System.Collections.Generic.List<FileDialogFilter>
+            {
+                new() { Name = "Quake 3 PK3", Extensions = new System.Collections.Generic.List<string> { "pk3" } },
+            },
+        };
+        var picked = await dlg.ShowAsync(this).ConfigureAwait(true);
+        if (picked is null || picked.Length == 0) return;
+        var path = picked[0];
+        if (_vm.Project.AssetRoots.Contains(path)) { _vm.StatusMessage = "PK3 already added."; return; }
+        _vm.Project.AssetRoots.Add(path);
+        _preview.ReloadAssets();
+        _vm.StatusMessage = $".pk3 added: {path}";
+    }
+
+    private void OnClearAssetRoots()
+    {
+        if (_vm.Project.AssetRoots.Count == 0) { _vm.StatusMessage = "No asset roots."; return; }
+        _vm.Project.AssetRoots.Clear();
+        _preview.ReloadAssets();
+        _vm.StatusMessage = "Asset roots cleared.";
     }
 
     private async void OnClosingAsync(object? sender, CancelEventArgs e)
