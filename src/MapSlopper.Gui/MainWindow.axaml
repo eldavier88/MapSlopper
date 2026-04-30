@@ -64,6 +64,13 @@
             </StackPanel>
         </Border>
 
-        <local:Editor2DControl Name="Canvas" />
+        <TabControl>
+            <TabItem Header="2D Editor">
+                <local:Editor2DControl Name="Canvas" />
+            </TabItem>
+            <TabItem Header="3D Preview">
+                <local:Preview3DControl Name="Preview3D" />
+            </TabItem>
+        </TabControl>
     </DockPanel>
 </Window>

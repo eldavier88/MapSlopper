@@ -13,6 +13,7 @@ public class MainWindow : Window
 {
     private EditorViewModel _vm = null!;
     private Editor2DControl _canvas = null!;
+    private Preview3DControl _preview = null!;
 
     private TextBlock _statusText = null!;
     private TextBlock _undoState = null!;
@@ -43,6 +44,7 @@ public class MainWindow : Window
     private void WireControls()
     {
         _canvas = this.FindControl<Editor2DControl>("Canvas")!;
+        _preview = this.FindControl<Preview3DControl>("Preview3D")!;
         _statusText = this.FindControl<TextBlock>("StatusText")!;
         _undoState = this.FindControl<TextBlock>("UndoState")!;
         _closedState = this.FindControl<TextBlock>("ClosedState")!;
@@ -51,6 +53,7 @@ public class MainWindow : Window
         _paintValue = this.FindControl<NumericUpDown>("PaintValue")!;
 
         _canvas.SetViewModel(_vm);
+        _preview.Bind(_vm);
 
         _brushSize.ValueChanged += (_, e) => _vm.BrushSizeCells = (int)Math.Max(1, (int)e.NewValue);
         _paintValue.ValueChanged += (_, e) =>
