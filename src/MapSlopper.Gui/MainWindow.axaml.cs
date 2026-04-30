@@ -175,7 +175,11 @@ public class MainWindow : Window
                 case Key.D5: case Key.NumPad5: SelectTool(4); e.Handled = true; break;
                 case Key.D6: case Key.NumPad6: SelectTool(5); e.Handled = true; break;
                 case Key.D7: case Key.NumPad7: SelectTool(6); e.Handled = true; break;
-                case Key.F: _canvas.FrameProject(); e.Handled = true; break;
+                case Key.F:
+                    if (IsPreview3DFocused()) _preview.FrameNow();
+                    else _canvas.FrameProject();
+                    e.Handled = true;
+                    break;
             }
         }
     }
@@ -193,6 +197,18 @@ public class MainWindow : Window
                 case NumericUpDown _:
                     return true;
             }
+            cur = cur.Parent as IControl;
+        }
+        return false;
+    }
+
+    private bool IsPreview3DFocused()
+    {
+        var f = FocusManager.Instance?.Current;
+        IControl? cur = f as IControl;
+        while (cur is not null)
+        {
+            if (cur is Preview3DControl) return true;
             cur = cur.Parent as IControl;
         }
         return false;

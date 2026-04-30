@@ -45,6 +45,9 @@ public sealed class Preview3DControl : Control
 
     // Cached triangulated faces from the most recent project rebuild.
     private readonly List<Face> _faces = new();
+    private string _statusLine = "3D preview \u2014 close a polygon to see geometry.";
+    private bool _hasAutoFramed;
+    private (Vec3 min, Vec3 max)? _bounds;
 
     public Preview3DControl()
     {
@@ -93,12 +96,85 @@ public sealed class Preview3DControl : Control
     {
         _rebuildTimer.Stop();
         if (_vm is null) return;
-        _faces.Clear();
-        var result = GeometryGenerator.Generate(_vm.Project);
-        if (result.Document is null) return;
-        foreach (var entity in CollectAllBrushOwners(result.Document))
-            foreach (var brush in entity.Brushes)
-                AddBrushFaces(brush);
+        try
+        {
+            _faces.Clear();
+            _bounds = null;
+            var result = GeometryGenerator.Generate(_vm.Project);
+            if (result.Document is null)
+            {
+                _statusLine = result.Issues.Count > 0
+                    ? "3D preview: " + result.Issues[0].Message
+                    : "3D preview \u2014 close a polygon to see geometry.";
+                return;
+            }
+            var brushCount = 0;
+            Vec3 bMin = new(double.PositiveInfinity, double.PositiveInfinity, double.PositiveInfinity);
+            Vec3 bMax = new(double.NegativeInfinity, double.NegativeInfinity, double.NegativeInfinity);
+            foreach (var entity in CollectAllBrushOwners(result.Document))
+            {
+                foreach (var brush in entity.Brushes)
+                {
+                    AddBrushFaces(brush);
+                    brushCount++;
+                    foreach (var p in brush.Planes)
+                    {
+                        AccumulateBounds(p.P1, ref bMin, ref bMax);
+                        AccumulateBounds(p.P2, ref bMin, ref bMax);
+                        AccumulateBounds(p.P3, ref bMin, ref bMax);
+                    }
+                }
+            }
+            if (brushCount > 0 && bMax.X > bMin.X)
+            {
+                _bounds = (bMin, bMax);
+                if (!_hasAutoFramed)
+                {
+                    FrameBounds(bMin, bMax);
+                    _hasAutoFramed = true;
+                }
+            }
+            _statusLine = brushCount == 0
+                ? "3D preview: polygon closed but no brushes generated. Paint the heightmap to add floors, or check warnings on Export."
+                : $"{brushCount} brushes \u2022 {_faces.Count} tris";
+        }
+        catch (Exception ex)
+        {
+            _statusLine = "3D preview error: " + ex.Message;
+            _faces.Clear();
+        }
+    }
+
+    private static void AccumulateBounds(Vec3 p, ref Vec3 min, ref Vec3 max)
+    {
+        if (p.X < min.X) min = new Vec3(p.X, min.Y, min.Z);
+        if (p.Y < min.Y) min = new Vec3(min.X, p.Y, min.Z);
+        if (p.Z < min.Z) min = new Vec3(min.X, min.Y, p.Z);
+        if (p.X > max.X) max = new Vec3(p.X, max.Y, max.Z);
+        if (p.Y > max.Y) max = new Vec3(max.X, p.Y, max.Z);
+        if (p.Z > max.Z) max = new Vec3(max.X, max.Y, p.Z);
+    }
+
+    private void FrameBounds(Vec3 min, Vec3 max)
+    {
+        var center = (min + max) * 0.5;
+        var size = max - min;
+        var radius = Math.Max(size.X, Math.Max(size.Y, size.Z));
+        if (radius < 1) radius = 256;
+        // Place camera back along -X-Y diagonal at ~1.5x radius, slightly elevated.
+        var dist = radius * 1.5;
+        var dir = new Vec3(-1, -1, 0).Normalized;
+        _camPos = new Vec3(center.X + dir.X * dist, center.Y + dir.Y * dist, center.Z + radius * 0.6);
+        // Look toward center.
+        var look = (center - _camPos).Normalized;
+        _yaw = Math.Atan2(look.Y, look.X);
+        _pitch = Math.Asin(Math.Clamp(look.Z, -1, 1));
+        _moveSpeed = Math.Max(50, radius * 0.5);
+    }
+
+    public void FrameNow()
+    {
+        if (_bounds is { } b) FrameBounds(b.min, b.max);
     }
 
     private static IEnumerable<MapEntity> CollectAllBrushOwners(MapDocument doc)
@@ -150,6 +226,12 @@ public sealed class Preview3DControl : Control
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (e.Key == Key.F)
+        {
+            FrameNow();
+            e.Handled = true;
+            return;
+        }
         _keysDown.Add(e.Key);
         Focus();
         e.Handled = true;
@@ -208,8 +290,7 @@ public sealed class Preview3DControl : Control
         if (_faces.Count == 0)
         {
             var fmt = new FormattedText(
-                "3D preview — close a polygon and paint a heightmap to see geometry.\n"
-                + "Right-drag = look, WASD = move, QE = up/down, scroll = speed",
+                _statusLine + "\nRight-drag = look, WASD = move, QE = up/down, F = frame, scroll = speed",
                 Typeface.Default, 14, TextAlignment.Left, TextWrapping.Wrap, new Size(bounds.Width - 40, bounds.Height));
             context.DrawText(Brushes.LightGray, new Point(20, 20), fmt);
             return;
