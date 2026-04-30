@@ -57,6 +57,8 @@ public static class GeometryGenerator
             ceilingTexture: project.CeilingTexture);
         ws.Brushes.AddRange(floorCeil.FloorBrushes);
         ws.Brushes.AddRange(floorCeil.CeilingBrushes);
+        foreach (var w in floorCeil.Warnings)
+            result.Issues.Add(new Issue(w, false));
 
         // Wall ring spans from floor base to ceiling top so floor & ceiling tuck snugly between walls.
         var wallTop = ceilingBottom + project.CeilingThickness;

@@ -243,7 +243,14 @@ public sealed class EditorViewModel : INotifyPropertyChanged
                 return;
             }
             MapWriter.WriteToFile(result.Document, path!);
-            StatusMessage = $"Exported {Path.GetFileName(path)} ({result.Issues.Count} warning(s)).";
+            if (result.Issues.Count > 0)
+            {
+                StatusMessage = $"Exported {Path.GetFileName(path)} - WARNING: {result.Issues[0].Message}";
+            }
+            else
+            {
+                StatusMessage = $"Exported {Path.GetFileName(path)} ({result.Document.Worldspawn.Brushes.Count} brushes).";
+            }
         }
         catch (Exception ex)
         {

@@ -18,6 +18,7 @@ public static class FloorCeilingGenerator
     {
         public List<Brush> FloorBrushes { get; } = new();
         public List<Brush> CeilingBrushes { get; } = new();
+        public List<string> Warnings { get; } = new();
     }
 
     /// <summary>
@@ -43,6 +44,13 @@ public static class FloorCeilingGenerator
             throw new ArgumentException("Ceiling must be above floor.");
 
         var result = new Result();
+        // Q3 world hull is +/-32768; q3map2 silently discards brushes that escape it.
+        // Reserve a minimum gap so the floor never punches the ceiling either.
+        const double MinFloorCeilingGap = 8.0;
+        var maxFloorTop = zCeilingBottom - MinFloorCeilingGap;
+        var clampedCells = 0;
+        ushort clampedMaxRaw = 0;
+
         // 1. Triangulate the polygon ONCE into convex CCW triangles.
         var verts = new List<Vec2>(ccwPolygon.Vertices);
         var tris = PolygonTriangulator.Triangulate(verts);
@@ -62,7 +70,14 @@ public static class FloorCeilingGenerator
         {
             var cellMin = heightmap.CellWorldMin(cx, cy);
             var cellMax = heightmap.CellWorldMax(cx, cy);
-            var floorTop = zFloorBase + heightmap.Sample(cx, cy);
+            var raw = heightmap.Sample(cx, cy);
+            var floorTop = zFloorBase + raw;
+            if (floorTop > maxFloorTop)
+            {
+                floorTop = maxFloorTop;
+                clampedCells++;
+                if (raw > clampedMaxRaw) clampedMaxRaw = raw;
+            }
             if (floorTop <= zFloorBase) continue; // zero-height cell → no floor brush
 
             // Clip each triangle to this cell's rectangle.
@@ -91,6 +106,13 @@ public static class FloorCeilingGenerator
                     bottomTexture: ceilingTexture);
                 result.CeilingBrushes.Add(ceiling);
             }
+        }
+
+        if (clampedCells > 0)
+        {
+            result.Warnings.Add(
+                $"{clampedCells} heightmap cell(s) painted above ceiling (max raw={clampedMaxRaw}); "
+                + $"floor tops clamped to z={maxFloorTop:F0}. Lower paint values or raise ceilingHeight.");
         }
 
         return result;

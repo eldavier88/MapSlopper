@@ -82,8 +82,9 @@
                 <Separator />
                 <TextBlock Text="Brush size (cells)" Foreground="#888" />
                 <NumericUpDown Name="BrushSize" Minimum="1" Maximum="64" Value="1" Increment="1" />
-                <TextBlock Text="Paint value (0..65535)" Foreground="#888" />
-                <NumericUpDown Name="PaintValue" Minimum="0" Maximum="65535" Value="64" Increment="16" />
+                <TextBlock Text="Paint value (Quake units)" Foreground="#888" />
+                <NumericUpDown Name="PaintValue" Minimum="0" Maximum="2040" Value="64" Increment="16" />
+                <TextBlock Text="Floor top Z = paint value. Keep below ceilingHeight (default 256)." Foreground="#666" TextWrapping="Wrap" FontSize="11" />
                 <Separator />
                 <TextBlock Name="CursorText" Text="Cursor: -" Foreground="#AAA" />
                 <TextBlock Text="Tip: middle-drag or Space+drag to pan, wheel to zoom." Foreground="#666" TextWrapping="Wrap" />
