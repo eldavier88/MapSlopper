@@ -18,6 +18,7 @@ public sealed class InsertOnEdgeTool : IEditorTool
         var edge = vm.Project.Outline.PickEdge(worldPos, radius);
         if (edge is null) return;
         var snapped = vm.SnapWorld(worldPos);
+        vm.EnsureHeightmapCovers(snapped);
         var midId = Guid.NewGuid();
         vm.Undo.Execute(new InsertOnEdgeCmd(vm.Project.Outline, edge.Value.A, edge.Value.B, midId, snapped));
         vm.SelectedPointId = midId;

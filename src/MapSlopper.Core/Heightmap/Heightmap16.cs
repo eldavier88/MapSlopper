@@ -10,11 +10,11 @@ namespace MapSlopper.Core.Heightmap;
 /// </summary>
 public sealed class Heightmap16
 {
-    public int Width { get; }
-    public int Height { get; }
+    public int Width { get; private set; }
+    public int Height { get; private set; }
     public double CellSize { get; }
-    public Vec2 Origin { get; }
-    public ushort[] Data { get; }
+    public Vec2 Origin { get; private set; }
+    public ushort[] Data { get; private set; }
 
     public Heightmap16(int width, int height, double cellSize, Vec2 origin)
     {
@@ -99,4 +99,42 @@ public sealed class Heightmap16
     public (Vec2 Min, Vec2 Max) WorldBounds() => (
         Origin,
         new Vec2(Origin.X + Width * CellSize, Origin.Y + Height * CellSize));
+
+    /// <summary>
+    /// Grows the heightmap (in-place) so that the world rectangle
+    /// <c>[worldMin..worldMax]</c> is fully covered by cells. Existing data is
+    /// preserved -- the heightmap NEVER shrinks. Returns true if the bounds
+    /// or data were actually expanded. Adds a small <paramref name="paddingCells"/>
+    /// margin so the polygon outline never sits flush against the edge.
+    /// </summary>
+    public bool GrowToInclude(Vec2 worldMin, Vec2 worldMax, int paddingCells = 2)
+    {
+        var (mn, mx) = WorldBounds();
+        // Required new origin / extent -- only ever grows outward.
+        var newOriginX = Math.Min(mn.X, worldMin.X - paddingCells * CellSize);
+        var newOriginY = Math.Min(mn.Y, worldMin.Y - paddingCells * CellSize);
+        var newMaxX    = Math.Max(mx.X, worldMax.X + paddingCells * CellSize);
+        var newMaxY    = Math.Max(mx.Y, worldMax.Y + paddingCells * CellSize);
+        // Snap origin to a multiple of CellSize relative to the old origin so
+        // existing cells line up at integer offsets and we can copy verbatim.
+        var dx = (int)Math.Ceiling((mn.X - newOriginX) / CellSize);
+        var dy = (int)Math.Ceiling((mn.Y - newOriginY) / CellSize);
+        newOriginX = mn.X - dx * CellSize;
+        newOriginY = mn.Y - dy * CellSize;
+        var newW = Math.Max(Width + dx, (int)Math.Ceiling((newMaxX - newOriginX) / CellSize));
+        var newH = Math.Max(Height + dy, (int)Math.Ceiling((newMaxY - newOriginY) / CellSize));
+        if (newW == Width && newH == Height && dx == 0 && dy == 0) return false;
+
+        var newData = new ushort[newW * newH];
+        for (var y = 0; y < Height; y++)
+        {
+            Array.Copy(Data, y * Width, newData, (y + dy) * newW + dx, Width);
+        }
+        Width = newW;
+        Height = newH;
+        Origin = new Vec2(newOriginX, newOriginY);
+        Data = newData;
+        Changed?.Invoke();
+        return true;
+    }
 }

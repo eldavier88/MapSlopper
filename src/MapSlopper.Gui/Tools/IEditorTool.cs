@@ -18,4 +18,14 @@ public interface IEditorTool
 
     /// <summary>Optional preview overlay for the tool (drawn after geometry).</summary>
     void RenderOverlay(EditorViewModel vm, Avalonia.Media.DrawingContext ctx, Editor2DControl canvas);
+
+    /// <summary>
+    /// Reset any tool-internal multi-click state (e.g. chained-add-point
+    /// "previous vertex", connect "first vertex"). Called when switching
+    /// tools, opening a project, or pressing Escape.
+    /// </summary>
+    void Reset() { }
+
+    /// <summary>Optional one-line hint shown in the status bar while active.</summary>
+    string? StatusHint(EditorViewModel vm) => null;
 }

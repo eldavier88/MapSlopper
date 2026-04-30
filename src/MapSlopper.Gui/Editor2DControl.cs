@@ -132,11 +132,13 @@ public class Editor2DControl : Control
         if (pt.Properties.IsLeftButtonPressed)
         {
             _isLeftDown = true;
+            _vm.ShiftDown = (e.KeyModifiers & Avalonia.Input.KeyModifiers.Shift) != 0;
             _vm.ActiveTool.OnPointerPressed(_vm, world, isRightClick: false);
             e.Handled = true;
         }
         else if (pt.Properties.IsRightButtonPressed)
         {
+            _vm.ShiftDown = (e.KeyModifiers & Avalonia.Input.KeyModifiers.Shift) != 0;
             _vm.ActiveTool.OnPointerPressed(_vm, world, isRightClick: true);
             e.Handled = true;
         }
@@ -163,6 +165,7 @@ public class Editor2DControl : Control
             InvalidateVisual();
             return;
         }
+        _vm.ShiftDown = (e.KeyModifiers & Avalonia.Input.KeyModifiers.Shift) != 0;
         _vm.ActiveTool.OnPointerMoved(_vm, CursorWorld, isPressed: _isLeftDown);
         InvalidateVisual();
     }

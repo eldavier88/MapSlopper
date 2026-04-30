@@ -31,11 +31,14 @@ public sealed class Preview3DControl : Control
 
     // Camera
     private Vec3 _camPos = new(-200, -200, 200);
+    private Vec3 _camVel = Vec3.Zero;
     private double _yaw = 0.6;     // radians, around world Z (up)
     private double _pitch = -0.4;  // radians, 0 = horizontal
     private double _moveSpeed = 200.0;
     private const double FovY = Math.PI / 3; // 60°
     private const double NearZ = 1.0;
+    /// <summary>Acceleration toward target velocity (1/s). Larger = snappier.</summary>
+    private const double Damping = 8.0;
 
     // Input state
     private readonly HashSet<Key> _keysDown = new();
@@ -130,7 +133,7 @@ public sealed class Preview3DControl : Control
                 _bounds = (bMin, bMax);
                 if (!_hasAutoFramed)
                 {
-                    FrameBounds(bMin, bMax);
+                    SpawnAtPlayerStart(result.Document, bMin, bMax);
                     _hasAutoFramed = true;
                 }
             }
@@ -177,6 +180,48 @@ public sealed class Preview3DControl : Control
         if (_bounds is { } b) FrameBounds(b.min, b.max);
     }
 
+    /// <summary>
+    /// Spawn the camera *inside* the level at the info_player_start origin
+    /// (eye height ~ 56) facing roughly toward the polygon centroid.
+    /// Falls back to FrameBounds when no player_start is found.
+    /// </summary>
+    private void SpawnAtPlayerStart(MapDocument doc, Vec3 bMin, Vec3 bMax)
+    {
+        Vec3? origin = null;
+        double yawDeg = 0;
+        foreach (var ent in doc.Entities)
+        {
+            if (!ent.Properties.TryGetValue("classname", out var cn)
+                || cn != "info_player_start") continue;
+            if (ent.Properties.TryGetValue("origin", out var ostr))
+            {
+                var parts = ostr.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 3
+                    && double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ox)
+                    && double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var oy)
+                    && double.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var oz))
+                {
+                    origin = new Vec3(ox, oy, oz);
+                }
+            }
+            if (ent.Properties.TryGetValue("angle", out var astr)
+                && double.TryParse(astr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ang))
+            {
+                yawDeg = ang;
+            }
+            break;
+        }
+        if (origin is null) { FrameBounds(bMin, bMax); return; }
+        // Eye height: Q3 player_start is at feet level + 24 by our placement.
+        // Add 32 more to roughly match a 56-unit eye height.
+        _camPos = new Vec3(origin.Value.X, origin.Value.Y, origin.Value.Z + 32);
+        _camVel = Vec3.Zero;
+        _yaw = yawDeg * Math.PI / 180.0;
+        _pitch = 0;
+        var size = bMax - bMin;
+        _moveSpeed = Math.Max(160, Math.Max(size.X, size.Y) * 0.4);
+    }
+
     private static IEnumerable<MapEntity> CollectAllBrushOwners(MapDocument doc)
     {
         yield return doc.Worldspawn;
@@ -208,20 +253,33 @@ public sealed class Preview3DControl : Control
 
     private void UpdateCamera(double dt)
     {
-        if (_keysDown.Count == 0) return;
-        var step = _moveSpeed * dt;
-        // Forward vector in XY plane only (so W doesn't dive when looking down).
-        var forward = new Vec3(Math.Cos(_yaw) * Math.Cos(_pitch), Math.Sin(_yaw) * Math.Cos(_pitch), Math.Sin(_pitch));
-        var flatForward = new Vec3(Math.Cos(_yaw), Math.Sin(_yaw), 0);
+        if (dt <= 0) return;
+        // Camera-relative basis: forward follows pitch so looking down + W
+        // dives down. Right is purely horizontal so strafing stays level.
+        var forward = new Vec3(
+            Math.Cos(_yaw) * Math.Cos(_pitch),
+            Math.Sin(_yaw) * Math.Cos(_pitch),
+            Math.Sin(_pitch));
         var right = new Vec3(Math.Sin(_yaw), -Math.Cos(_yaw), 0);
-        if (_keysDown.Contains(Key.W)) _camPos += flatForward * step;
-        if (_keysDown.Contains(Key.S)) _camPos -= flatForward * step;
-        if (_keysDown.Contains(Key.D)) _camPos += right * step;
-        if (_keysDown.Contains(Key.A)) _camPos -= right * step;
-        if (_keysDown.Contains(Key.E)) _camPos += new Vec3(0, 0, step);
-        if (_keysDown.Contains(Key.Q)) _camPos -= new Vec3(0, 0, step);
-        // suppress unused-var warning
-        _ = forward;
+        var up = new Vec3(0, 0, 1);
+
+        // Build target velocity from input (accumulated, normalised so
+        // diagonal isn't faster).
+        var input = Vec3.Zero;
+        if (_keysDown.Contains(Key.W)) input += forward;
+        if (_keysDown.Contains(Key.S)) input -= forward;
+        if (_keysDown.Contains(Key.D)) input += right;
+        if (_keysDown.Contains(Key.A)) input -= right;
+        if (_keysDown.Contains(Key.E) || _keysDown.Contains(Key.Space)) input += up;
+        if (_keysDown.Contains(Key.Q) || _keysDown.Contains(Key.LeftCtrl)) input -= up;
+        var len = input.Length;
+        if (len > 1e-6) input /= len;
+        var target = input * _moveSpeed;
+
+        // Exponential smoothing toward target velocity (spaceship drift feel).
+        var alpha = 1 - Math.Exp(-Damping * dt);
+        _camVel += (target - _camVel) * alpha;
+        _camPos += _camVel * dt;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

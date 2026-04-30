@@ -104,6 +104,9 @@ public sealed class OutlineGraph
         return removed;
     }
 
+    /// <summary>True if an edge between <paramref name="a"/> and <paramref name="b"/> exists.</summary>
+    public bool HasEdge(Guid a, Guid b) => _edges.Contains(new OutlineEdge(a, b));
+
     /// <summary>Inserts a new point on an existing edge, splitting it.</summary>
     public OutlinePoint InsertPointOnEdge(Guid a, Guid b, Vec2 at)
     {

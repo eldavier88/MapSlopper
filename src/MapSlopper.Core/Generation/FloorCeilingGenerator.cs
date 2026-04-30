@@ -7,10 +7,16 @@ using MapSlopper.Core.Heightmap;
 namespace MapSlopper.Core.Generation;
 
 /// <summary>
-/// Generates floor and ceiling brushes by intersecting the heightmap grid with
-/// the polygon outline. Each cell becomes one or more convex prisms whose
-/// XY footprint is exactly the polygon ∩ cell. The ceiling reuses the same
-/// horizontal subdivision but has constant Z, allowing manual edits later.
+/// Generates floor and ceiling brushes by decomposing the heightmap into the
+/// MINIMAL number of axis-aligned rectangles per distinct height value, then
+/// clipping each rectangle by the polygon outline. The previous implementation
+/// emitted one prism per (cell × triangle) intersection which produced
+/// thousands of tiny brushes and an additional diagonal cut inside every
+/// polygon. This version produces:
+///   * exactly ONE ceiling brush (the whole polygon, since the ceiling is flat),
+///   * exactly ONE floor brush when the heightmap is uniform inside the polygon,
+///   * a small number of large floor brushes when heights vary, with edges
+///     placed only where the height actually changes.
 /// </summary>
 public static class FloorCeilingGenerator
 {
@@ -21,11 +27,6 @@ public static class FloorCeilingGenerator
         public List<string> Warnings { get; } = new();
     }
 
-    /// <summary>
-    /// <paramref name="zFloorBase"/> is the bottom Z of the floor slab (typically 0).
-    /// Floor cell tops sit at the cell's heightmap value (interpreted as Quake units).
-    /// Ceiling brushes span <paramref name="zCeilingBottom"/> to <c>zCeilingBottom + ceilingThickness</c>.
-    /// </summary>
     public static Result Generate(
         Polygon2D ccwPolygon,
         Heightmap16 heightmap,
@@ -44,68 +45,107 @@ public static class FloorCeilingGenerator
             throw new ArgumentException("Ceiling must be above floor.");
 
         var result = new Result();
-        // Q3 world hull is +/-32768; q3map2 silently discards brushes that escape it.
-        // Reserve a minimum gap so the floor never punches the ceiling either.
         const double MinFloorCeilingGap = 8.0;
         var maxFloorTop = zCeilingBottom - MinFloorCeilingGap;
         var clampedCells = 0;
         ushort clampedMaxRaw = 0;
 
-        // 1. Triangulate the polygon ONCE into convex CCW triangles.
-        var verts = new List<Vec2>(ccwPolygon.Vertices);
-        var tris = PolygonTriangulator.Triangulate(verts);
+        // Polygon as a List<Vec2> for clipping.
+        var polyVerts = new List<Vec2>(ccwPolygon.Vertices);
 
-        // 2. For each cell that is at all touched by the polygon AABB, clip each
-        //    triangle to the cell rectangle and emit prisms.
+        // -------- Ceiling: ONE brush spanning the whole polygon. --------
+        result.CeilingBrushes.Add(BrushFactory.MakeVerticalPrism(
+            polyVerts, zCeilingBottom, zCeilingBottom + ceilingThickness,
+            sideTexture: wallTexture,
+            topTexture: ceilingTexture,
+            bottomTexture: ceilingTexture));
+
+        // -------- Floor: greedy rectangle decomposition by height. --------
+        // Restrict scan to the heightmap window covering the polygon AABB.
         var (pMin, pMax) = ccwPolygon.Bounds();
         var (oMin, _) = heightmap.WorldBounds();
+        var cs = heightmap.CellSize;
+        var cx0 = Math.Max(0, (int)Math.Floor((pMin.X - oMin.X) / cs));
+        var cy0 = Math.Max(0, (int)Math.Floor((pMin.Y - oMin.Y) / cs));
+        var cx1 = Math.Min(heightmap.Width - 1, (int)Math.Floor((pMax.X - oMin.X) / cs));
+        var cy1 = Math.Min(heightmap.Height - 1, (int)Math.Floor((pMax.Y - oMin.Y) / cs));
+        if (cx1 < cx0 || cy1 < cy0) return result;
 
-        var cx0 = Math.Max(0, (int)Math.Floor((pMin.X - oMin.X) / heightmap.CellSize));
-        var cy0 = Math.Max(0, (int)Math.Floor((pMin.Y - oMin.Y) / heightmap.CellSize));
-        var cx1 = Math.Min(heightmap.Width - 1, (int)Math.Floor((pMax.X - oMin.X) / heightmap.CellSize));
-        var cy1 = Math.Min(heightmap.Height - 1, (int)Math.Floor((pMax.Y - oMin.Y) / heightmap.CellSize));
-
-        for (var cy = cy0; cy <= cy1; cy++)
-        for (var cx = cx0; cx <= cx1; cx++)
+        var w = cx1 - cx0 + 1;
+        var h = cy1 - cy0 + 1;
+        // Local height grid; clamp to the floor-ceiling gap.
+        var heights = new ushort[w * h];
+        for (var dy = 0; dy < h; dy++)
+        for (var dx = 0; dx < w; dx++)
         {
-            var cellMin = heightmap.CellWorldMin(cx, cy);
-            var cellMax = heightmap.CellWorldMax(cx, cy);
-            var raw = heightmap.Sample(cx, cy);
+            var raw = heightmap.Sample(cx0 + dx, cy0 + dy);
             var floorTop = zFloorBase + raw;
             if (floorTop > maxFloorTop)
             {
-                floorTop = maxFloorTop;
                 clampedCells++;
                 if (raw > clampedMaxRaw) clampedMaxRaw = raw;
+                // Map raw to the clamped value (cells with same effective height
+                // still merge, even if their raw values differ above the cap).
+                raw = (ushort)Math.Max(0, maxFloorTop - zFloorBase);
             }
-            if (floorTop <= zFloorBase) continue; // zero-height cell → no floor brush
+            heights[dy * w + dx] = raw;
+        }
 
-            // Clip each triangle to this cell's rectangle.
-            foreach (var tri in tris)
+        var consumed = new bool[w * h];
+        var rects = new List<(int x0, int y0, int x1, int y1, ushort height)>();
+        for (var dy = 0; dy < h; dy++)
+        for (var dx = 0; dx < w; dx++)
+        {
+            if (consumed[dy * w + dx]) continue;
+            var height = heights[dy * w + dx];
+            if (height == 0) { consumed[dy * w + dx] = true; continue; }
+
+            // Greedy: extend right as far as identical height & not consumed.
+            var x1 = dx;
+            while (x1 + 1 < w
+                && !consumed[dy * w + (x1 + 1)]
+                && heights[dy * w + (x1 + 1)] == height)
+                x1++;
+            // Extend down: each next row must have identical height across [dx..x1].
+            var y1 = dy;
+            while (y1 + 1 < h)
             {
-                var subject = new List<Vec2> { tri.A, tri.B, tri.C };
-                var clipped = RectangleClipper.Clip(
-                    subject, cellMin.X, cellMin.Y, cellMax.X, cellMax.Y);
-                clipped = RectangleClipper.RemoveDegenerate(clipped);
-                if (clipped.Count < 3) continue;
-
-                // Each triangle's clip against a rectangle is a convex polygon (3..7 verts).
-                // Emit a vertical prism for the floor.
-                var floor = BrushFactory.MakeVerticalPrism(
-                    clipped, zFloorBase, floorTop,
-                    sideTexture: wallTexture,
-                    topTexture: floorTexture,
-                    bottomTexture: floorTexture);
-                result.FloorBrushes.Add(floor);
-
-                // Ceiling: same XY footprint, between zCeilingBottom and zCeilingBottom+thickness.
-                var ceiling = BrushFactory.MakeVerticalPrism(
-                    clipped, zCeilingBottom, zCeilingBottom + ceilingThickness,
-                    sideTexture: wallTexture,
-                    topTexture: ceilingTexture,
-                    bottomTexture: ceilingTexture);
-                result.CeilingBrushes.Add(ceiling);
+                var ok = true;
+                for (var xx = dx; xx <= x1; xx++)
+                {
+                    if (consumed[(y1 + 1) * w + xx] || heights[(y1 + 1) * w + xx] != height)
+                    { ok = false; break; }
+                }
+                if (!ok) break;
+                y1++;
             }
+            for (var yy = dy; yy <= y1; yy++)
+                for (var xx = dx; xx <= x1; xx++)
+                    consumed[yy * w + xx] = true;
+            rects.Add((dx, dy, x1, y1, height));
+        }
+
+        // Convert each rect to world-space and clip by the polygon.
+        foreach (var r in rects)
+        {
+            var rxMin = oMin.X + (cx0 + r.x0) * cs;
+            var ryMin = oMin.Y + (cy0 + r.y0) * cs;
+            var rxMax = oMin.X + (cx0 + r.x1 + 1) * cs;
+            var ryMax = oMin.Y + (cy0 + r.y1 + 1) * cs;
+
+            var clipped = RectangleClipper.Clip(polyVerts, rxMin, ryMin, rxMax, ryMax);
+            clipped = RectangleClipper.RemoveDegenerate(clipped);
+            if (clipped.Count < 3) continue;
+
+            var floorTop = zFloorBase + r.height;
+            if (floorTop <= zFloorBase) continue;
+
+            var floor = BrushFactory.MakeVerticalPrism(
+                clipped, zFloorBase, floorTop,
+                sideTexture: wallTexture,
+                topTexture: floorTexture,
+                bottomTexture: floorTexture);
+            result.FloorBrushes.Add(floor);
         }
 
         if (clampedCells > 0)
@@ -114,7 +154,6 @@ public static class FloorCeilingGenerator
                 $"{clampedCells} heightmap cell(s) painted above ceiling (max raw={clampedMaxRaw}); "
                 + $"floor tops clamped to z={maxFloorTop:F0}. Lower paint values or raise ceilingHeight.");
         }
-
         return result;
     }
 }

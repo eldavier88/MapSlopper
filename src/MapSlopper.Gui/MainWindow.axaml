@@ -82,12 +82,16 @@
                 <Separator />
                 <TextBlock Text="Brush size (cells)" Foreground="#888" />
                 <NumericUpDown Name="BrushSize" Minimum="1" Maximum="64" Value="1" Increment="1" />
-                <TextBlock Text="Paint value (Quake units)" Foreground="#888" />
-                <NumericUpDown Name="PaintValue" Minimum="0" Maximum="2040" Value="64" Increment="16" />
-                <TextBlock Text="Floor top Z = paint value. Keep below ceilingHeight (default 256)." Foreground="#666" TextWrapping="Wrap" FontSize="11" />
+                <TextBlock Text="Paint value (Quake units, 0..65535)" Foreground="#888" />
+                <NumericUpDown Name="PaintValue" Minimum="0" Maximum="65535" Value="64" Increment="16" />
+                <local:HeightHistogramControl Name="HeightHistogram" Height="80" />
+                <TextBlock Text="Floor top Z = paint value. Auto-clamped to (ceilingHeight - 8) at export." Foreground="#666" TextWrapping="Wrap" FontSize="11" />
+                <Separator />
+                <CheckBox Name="SnapCheck" Content="Snap Move to grid (G / Shift)" Foreground="#DDD" />
                 <Separator />
                 <TextBlock Name="CursorText" Text="Cursor: -" Foreground="#AAA" />
-                <TextBlock Text="Tip: middle-drag or Space+drag to pan, wheel to zoom." Foreground="#666" TextWrapping="Wrap" />
+                <TextBlock Name="ToolHintText" Text="" Foreground="#9CB" TextWrapping="Wrap" FontSize="11" />
+                <TextBlock Text="Tip: middle-drag or Space+drag to pan, wheel to zoom. Esc resets the active tool's chain." Foreground="#666" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
 

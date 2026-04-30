@@ -92,9 +92,9 @@ function New-Project {
         }
         ceilingHeight        = 256 + $rng.Next(0, 256)
         wallThickness        = 16
-        floorTexture         = "base_floor/clang_floor"
-        wallTexture          = "base_wall/atech1_4"
-        ceilingTexture       = "base_ceiling/ceil1_3"
+        floorTexture         = "random/floor"
+        wallTexture          = "random/wall"
+        ceilingTexture       = "random/ceiling"
         playerStartOverride  = $null
         lightSpacing         = 256 + $rng.Next(0, 512)
         lightIntensity       = 300
@@ -107,7 +107,8 @@ function New-Project {
 
 $work = Join-Path $env:TEMP "mapslopper-fuzz"
 Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $work,"$work\baseq3","$work\maps","$work\projects" | Out-Null
+New-Item -ItemType Directory -Path $work,"$work\baseq3","$work\baseq3\scripts","$work\maps","$work\projects" | Out-Null
+Copy-Item assets/baseq3/scripts/mapslopper.shader "$work\baseq3\scripts\mapslopper.shader" -Force
 
 $failures = New-Object System.Collections.Generic.List[object]
 $passCount = 0

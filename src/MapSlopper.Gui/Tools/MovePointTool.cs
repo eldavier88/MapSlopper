@@ -32,9 +32,12 @@ public sealed class MovePointTool : IEditorTool
     public void OnPointerMoved(EditorViewModel vm, Vec2 worldPos, bool isPressed)
     {
         if (!isPressed || _grabbed is null) return;
+        var target = vm.ShouldSnapToGrid ? vm.SnapWorldToCell(worldPos) : worldPos;
+        // Grow the heightmap so the moved vertex stays inside it.
+        vm.EnsureHeightmapCovers(target);
         // Live drag: mutate the graph directly (fires Changed -> repaint).
         // The single MovePointCmd captured at release covers the whole drag.
-        vm.Project.Outline.MovePoint(_grabbed.Value, vm.SnapWorld(worldPos));
+        vm.Project.Outline.MovePoint(_grabbed.Value, target);
     }
 
     public void OnPointerReleased(EditorViewModel vm, Vec2 worldPos)
@@ -52,4 +55,9 @@ public sealed class MovePointTool : IEditorTool
     }
 
     public void RenderOverlay(EditorViewModel vm, DrawingContext ctx, Editor2DControl canvas) { }
+
+    public string? StatusHint(EditorViewModel vm) =>
+        vm.ShouldSnapToGrid
+            ? "Move tool: SNAP ON (cell-aligned). Drag a vertex."
+            : "Move tool: drag a vertex. Hold Shift or toggle Snap to align to grid.";
 }

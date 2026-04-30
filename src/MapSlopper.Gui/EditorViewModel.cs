@@ -32,6 +32,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged
     private int _brushSizeCells = 1;
     private ushort _paintValue = 64;
     private double _pixelsPerWorldUnit = 1.0;
+    private bool _snapToGrid;
 
     public EditorViewModel()
     {
@@ -80,7 +81,15 @@ public sealed class EditorViewModel : INotifyPropertyChanged
     public IEditorTool ActiveTool
     {
         get => _activeTool;
-        set { if (!ReferenceEquals(_activeTool, value)) { _activeTool = value; OnPropertyChanged(); RepaintRequested?.Invoke(); } }
+        set
+        {
+            if (ReferenceEquals(_activeTool, value)) return;
+            // Reset previous tool's chained / pending state on switch.
+            _activeTool.Reset();
+            _activeTool = value;
+            OnPropertyChanged();
+            RepaintRequested?.Invoke();
+        }
     }
 
     public string? CurrentFilePath
@@ -132,6 +141,23 @@ public sealed class EditorViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// When true (toggle: 'G' key, or the Snap checkbox), the Move tool snaps
+    /// vertices to whole heightmap-cell multiples relative to the heightmap
+    /// origin. Holding Shift while dragging acts as a temporary toggle.
+    /// </summary>
+    public bool SnapToGrid
+    {
+        get => _snapToGrid;
+        set { if (_snapToGrid != value) { _snapToGrid = value; OnPropertyChanged(); } }
+    }
+
+    /// <summary>Transient: true while Shift is held during a pointer event.</summary>
+    public bool ShiftDown { get; set; }
+
+    /// <summary>True when grid snap should currently apply (toggle OR Shift).</summary>
+    public bool ShouldSnapToGrid => _snapToGrid || ShiftDown;
+
     public bool IsClosedPolygon =>
         _project.Outline.TryGetClosedPolygon(out _);
 
@@ -142,6 +168,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged
         CurrentFilePath = null;
         IsDirty = false;
         SelectedPointId = null;
+        _activeTool.Reset();
         StatusMessage = "New project.";
     }
 
@@ -167,6 +194,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged
             CurrentFilePath = result[0];
             IsDirty = false;
             SelectedPointId = null;
+            _activeTool.Reset();
             StatusMessage = $"Opened {Path.GetFileName(result[0])}.";
         }
         catch (Exception ex)
@@ -285,6 +313,29 @@ public sealed class EditorViewModel : INotifyPropertyChanged
         if (step <= 0) return worldPos;
         var sx = Math.Round(worldPos.X / step) * step;
         var sy = Math.Round(worldPos.Y / step) * step;
+        return new Vec2(sx, sy);
+    }
+
+    /// <summary>
+    /// Ensure the heightmap covers <paramref name="worldPos"/>. Grows the
+    /// heightmap outward (never shrinks) when needed. Call before adding or
+    /// moving a vertex so the polygon never lives outside the height grid.
+    /// </summary>
+    public void EnsureHeightmapCovers(Vec2 worldPos)
+    {
+        _project.Heightmap.GrowToInclude(worldPos, worldPos);
+    }
+
+    /// <summary>
+    /// Snap a world position to the nearest whole-heightmap-cell location
+    /// (origin-aligned). Used by the Move tool when SnapToGrid is on or
+    /// Shift is held.
+    /// </summary>
+    public Vec2 SnapWorldToCell(Vec2 worldPos)
+    {
+        var hm = _project.Heightmap;
+        var sx = Math.Round((worldPos.X - hm.Origin.X) / hm.CellSize) * hm.CellSize + hm.Origin.X;
+        var sy = Math.Round((worldPos.Y - hm.Origin.Y) / hm.CellSize) * hm.CellSize + hm.Origin.Y;
         return new Vec2(sx, sy);
     }
 

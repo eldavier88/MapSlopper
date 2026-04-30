@@ -7,7 +7,9 @@ namespace MapSlopper.Gui.Tools;
 
 /// <summary>
 /// First click selects an existing vertex; second click on another vertex adds
-/// the connecting edge (one undo step); third click resets the pending state.
+/// the connecting edge. In chain mode (default) the second vertex becomes the
+/// new "first" so further clicks keep extending the chain. Right-click or
+/// Escape (host) resets. Reset also fires on tool-switch and project-load.
 /// </summary>
 public sealed class ConnectPointsTool : IEditorTool
 {
@@ -18,18 +20,12 @@ public sealed class ConnectPointsTool : IEditorTool
 
     public void OnPointerPressed(EditorViewModel vm, Vec2 worldPos, bool isRightClick)
     {
-        if (isRightClick) { _pending = null; vm.SelectedPointId = null; return; }
+        if (isRightClick) { Reset(); vm.SelectedPointId = null; vm.StatusMessage = "Connect: chain reset."; return; }
         var radius = 8.0 / Math.Max(vm.PixelsPerWorldUnit, 1e-6);
         var pick = vm.Project.Outline.PickPoint(worldPos, radius);
 
-        // Third-click reset (current state has _pending and click is far from any point).
-        if (_pending is not null && pick is null)
-        {
-            _pending = null;
-            vm.SelectedPointId = null;
-            return;
-        }
-        if (pick is null) return;
+        // Click in empty space resets the chain.
+        if (pick is null) { Reset(); vm.SelectedPointId = null; return; }
 
         if (_pending is null)
         {
@@ -40,16 +36,19 @@ public sealed class ConnectPointsTool : IEditorTool
 
         if (_pending == pick.Id)
         {
-            _pending = null;
+            // Clicking the same vertex twice ends the chain.
+            Reset();
             vm.SelectedPointId = null;
             return;
         }
 
         var a = _pending.Value;
         var b = pick.Id;
-        _pending = null;
+        if (!vm.Project.Outline.HasEdge(a, b))
+            vm.Undo.Execute(new AddEdgeCmd(vm.Project.Outline, a, b));
+        // Chain: the just-connected target becomes the new pending source.
+        _pending = b;
         vm.SelectedPointId = b;
-        vm.Undo.Execute(new AddEdgeCmd(vm.Project.Outline, a, b));
     }
 
     public void OnPointerMoved(EditorViewModel vm, Vec2 worldPos, bool isPressed) { }
@@ -63,4 +62,11 @@ public sealed class ConnectPointsTool : IEditorTool
         var pen = new Pen(Brushes.OrangeRed, 2);
         ctx.DrawEllipse(null, pen, s, 10, 10);
     }
+
+    public void Reset() => _pending = null;
+
+    public string? StatusHint(EditorViewModel vm) =>
+        _pending is null
+            ? "Click a vertex to start a connection chain."
+            : "Click another vertex to connect (chains). Esc / right-click / empty-space to reset.";
 }

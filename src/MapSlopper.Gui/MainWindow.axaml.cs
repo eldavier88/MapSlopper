@@ -23,6 +23,9 @@ public class MainWindow : Window
     private TextBlock _activeToolText = null!;
     private NumericUpDown _brushSize = null!;
     private NumericUpDown _paintValue = null!;
+    private HeightHistogramControl _histogram = null!;
+    private CheckBox _snapCheck = null!;
+    private TextBlock _toolHint = null!;
     private bool _suppressClosePrompt;
 
     public MainWindow()
@@ -53,9 +56,17 @@ public class MainWindow : Window
         _activeToolText = this.FindControl<TextBlock>("ActiveToolText")!;
         _brushSize = this.FindControl<NumericUpDown>("BrushSize")!;
         _paintValue = this.FindControl<NumericUpDown>("PaintValue")!;
+        _histogram = this.FindControl<HeightHistogramControl>("HeightHistogram")!;
+        _snapCheck = this.FindControl<CheckBox>("SnapCheck")!;
+        _toolHint = this.FindControl<TextBlock>("ToolHintText")!;
 
         _canvas.SetViewModel(_vm);
         _preview.Bind(_vm);
+        _histogram.Bind(_vm);
+
+        _snapCheck.IsChecked = _vm.SnapToGrid;
+        _snapCheck.Checked += (_, _) => _vm.SnapToGrid = true;
+        _snapCheck.Unchecked += (_, _) => _vm.SnapToGrid = false;
 
         _brushSize.ValueChanged += (_, e) => _vm.BrushSizeCells = (int)Math.Max(1, (int)e.NewValue);
         _paintValue.ValueChanged += (_, e) =>
@@ -119,6 +130,7 @@ public class MainWindow : Window
     private void UpdateActiveToolText()
     {
         _activeToolText.Text = _vm.ActiveTool.Name;
+        if (_toolHint is not null) _toolHint.Text = _vm.ActiveTool.StatusHint(_vm) ?? string.Empty;
     }
 
     private void WireMenus()
@@ -175,6 +187,17 @@ public class MainWindow : Window
                 case Key.D5: case Key.NumPad5: SelectTool(4); e.Handled = true; break;
                 case Key.D6: case Key.NumPad6: SelectTool(5); e.Handled = true; break;
                 case Key.D7: case Key.NumPad7: SelectTool(6); e.Handled = true; break;
+                case Key.Escape:
+                    _vm.ActiveTool.Reset();
+                    _vm.SelectedPointId = null;
+                    _vm.StatusMessage = $"{_vm.ActiveTool.Name}: reset.";
+                    e.Handled = true;
+                    break;
+                case Key.G:
+                    _vm.SnapToGrid = !_vm.SnapToGrid;
+                    _vm.StatusMessage = "Snap to grid: " + (_vm.SnapToGrid ? "ON" : "OFF");
+                    e.Handled = true;
+                    break;
                 case Key.F:
                     if (IsPreview3DFocused()) _preview.FrameNow();
                     else _canvas.FrameProject();
