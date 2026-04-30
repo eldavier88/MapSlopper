@@ -31,27 +31,19 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      - name: Publish CLI (self-contained, single file)
-        run: dotnet publish src/MapSlopper.Cli/MapSlopper.Cli.csproj
+      - name: Publish GUI (self-contained, single file — includes CLI)
+        run: dotnet publish src/MapSlopper.Gui/MapSlopper.Gui.csproj
           --configuration Release
           --runtime ${{ matrix.rid }}
           --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
-          --output publish/${{ matrix.rid }}/cli
-
-      - name: Publish GUI (self-contained)
-        run: dotnet publish src/MapSlopper.Gui/MapSlopper.Gui.csproj
-          --configuration Release
-          --runtime ${{ matrix.rid }}
-          --self-contained true
-          --output publish/${{ matrix.rid }}/gui
+          --output publish/${{ matrix.rid }}
 
       - name: Copy samples and docs
         shell: bash
         run: |
-          mkdir -p publish/${{ matrix.rid }}/samples
-          cp -r samples/* publish/${{ matrix.rid }}/samples/
+          cp -r samples publish/${{ matrix.rid }}/samples
           cp README.md publish/${{ matrix.rid }}/README.md
           cp -r docs publish/${{ matrix.rid }}/docs
 
