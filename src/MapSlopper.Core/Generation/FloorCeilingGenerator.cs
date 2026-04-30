@@ -101,20 +101,49 @@ public static class FloorCeilingGenerator
 
         foreach (var piece in pieces)
         {
-            var regions = ComputeRegionsForPiece(
+            // Compute per-cell quantized heights inside this piece.
+            var (regions, baseRaw) = ComputeRegionsForPiece(
                 piece, heightmap, oMin, cs,
                 minQuant, maxRawAllowed,
                 ref clampedCells, ref clampedMaxRaw);
 
-            foreach (var (footprint, raw) in regions)
+            // Always emit ONE base floor + ONE base ceiling for the whole
+            // piece, even when paint is uniform. This guarantees the piece's
+            // interior is hermetically sealed -- previously, cell-clipped
+            // sub-fragments at sharp polygon corners could leave pinhole
+            // gaps between the floor edge and the wall's inner face,
+            // causing q3map2 leaks. Stacked brushes then add elevated
+            // sections on top.
+            var pieceCcw = piece;
+            var baseTop = zFloorBase + baseRaw;
+            if (baseTop > zFloorBase)
             {
-                var floorTop = zFloorBase + raw;
-                if (floorTop <= zFloorBase) continue;
                 result.FloorBrushes.Add(BrushFactory.MakeVerticalPrism(
-                    footprint, zFloorBase, floorTop,
+                    pieceCcw, zFloorBase, baseTop,
                     sideTexture: wallTexture,
                     topTexture: floorTexture,
                     bottomTexture: floorTexture));
+                result.CeilingBrushes.Add(BrushFactory.MakeVerticalPrism(
+                    pieceCcw, zCeilingBottom, zCeilingBottom + ceilingThickness,
+                    sideTexture: wallTexture,
+                    topTexture: ceilingTexture,
+                    bottomTexture: ceilingTexture));
+            }
+
+            // Stacked elevations: one brush per merged same-value region
+            // whose value is strictly above the piece's base.
+            foreach (var (footprint, raw) in regions)
+            {
+                if (raw <= baseRaw) continue;
+                var floorTop = zFloorBase + raw;
+                if (floorTop <= baseTop) continue;
+                result.FloorBrushes.Add(BrushFactory.MakeVerticalPrism(
+                    footprint, baseTop, floorTop,
+                    sideTexture: wallTexture,
+                    topTexture: floorTexture,
+                    bottomTexture: floorTexture));
+                // Mirror stack with a matching ceiling region so floor and
+                // ceiling subdivide identically (per project spec).
                 result.CeilingBrushes.Add(BrushFactory.MakeVerticalPrism(
                     footprint, zCeilingBottom, zCeilingBottom + ceilingThickness,
                     sideTexture: wallTexture,
@@ -136,9 +165,11 @@ public static class FloorCeilingGenerator
     /// Cell-clip + merge: tile the convex piece with cell-clipped polygons
     /// tagged by quantized height, then greedily merge same-value adjacent
     /// pieces while convex. Returns the final list of (footprint, rawHeight)
-    /// pairs whose footprints exactly tile the input piece.
+    /// pairs whose footprints exactly tile the input piece, plus the
+    /// minimum quantized raw value seen across the piece (used as the
+    /// piece's "base" height).
     /// </summary>
-    private static List<(List<Vec2> Footprint, ushort RawHeight)> ComputeRegionsForPiece(
+    private static (List<(List<Vec2> Footprint, ushort RawHeight)> Regions, ushort BaseRaw) ComputeRegionsForPiece(
         List<Vec2> piece,
         Heightmap16 hm,
         Vec2 oMin,
@@ -148,8 +179,9 @@ public static class FloorCeilingGenerator
         ref int clampedCells,
         ref ushort clampedMaxRaw)
     {
-        var output = new List<(List<Vec2>, ushort)>();
+        var output = new List<(List<Vec2> Footprint, ushort RawHeight)>();
         var (pMin, pMax) = ComputeBounds(piece);
+        ushort baseRaw = ushort.MaxValue;
 
         // Cell index range covering the piece's AABB. Use floor/ceil so we
         // pick up cells whose AABB merely TOUCHES the piece on an edge.
@@ -159,7 +191,7 @@ public static class FloorCeilingGenerator
         var cy1 = (int)Math.Floor((pMax.Y - oMin.Y) / cs);
         cx0 = Math.Max(0, cx0); cy0 = Math.Max(0, cy0);
         cx1 = Math.Min(hm.Width - 1, cx1); cy1 = Math.Min(hm.Height - 1, cy1);
-        if (cx1 < cx0 || cy1 < cy0) return output;
+        if (cx1 < cx0 || cy1 < cy0) return (output, minQuant);
 
         var pieces = new List<(List<Vec2> Poly, ushort RawHeight)>();
         for (var cy = cy0; cy <= cy1; cy++)
@@ -172,8 +204,12 @@ public static class FloorCeilingGenerator
             var clipped = RectangleClipper.Clip(piece, cellMinX, cellMinY, cellMaxX, cellMaxY);
             clipped = RectangleClipper.RemoveDegenerate(clipped);
             if (clipped.Count < 3) continue;
-            // Skip near-zero-area slivers from numerical noise.
-            if (PolygonArea(clipped) < cs * cs * 1e-4) continue;
+            // Don't drop tiny corner fragments by area: at sharp polygon
+            // corners (e.g. star tips, narrow notches) the cell containing
+            // the vertex can be arbitrarily small. Dropping it leaves a
+            // pinhole between the floor edge and the wall's inner face,
+            // which q3map2 reports as a leak. The only valid skip is "not
+            // a polygon" (< 3 vertices after dedupe).
 
             var raw = hm.Sample(cx, cy);
             // Clamp above ceiling.
@@ -188,6 +224,7 @@ public static class FloorCeilingGenerator
             // Clamp lower bound.
             if (q < minQuant) q = minQuant;
             if (q > maxRawAllowed) q = maxRawAllowed;
+            if (q < baseRaw) baseRaw = q;
             pieces.Add((clipped, q));
         }
 
@@ -234,7 +271,8 @@ public static class FloorCeilingGenerator
             if (pruned.Count < 3) continue;
             output.Add((pruned, p.RawHeight));
         }
-        return output;
+        if (baseRaw == ushort.MaxValue) baseRaw = minQuant;
+        return (output, baseRaw);
     }
 
     private static (Vec2 Min, Vec2 Max) ComputeBounds(List<Vec2> poly)
