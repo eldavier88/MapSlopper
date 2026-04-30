@@ -1,5 +1,6 @@
 using MapSlopper.Core.Geometry;
 using MapSlopper.Core.Project;
+using Xunit;
 
 namespace MapSlopper.Core.Tests.Project;
 
@@ -63,7 +64,7 @@ public class ProjectJsonIoTests
         var p = new MapSlopperProject();
         var json = ProjectJsonIo.Serialize(p);
         Assert.StartsWith("{", json);
-        Assert.Contains("\n", json);
+        Assert.True(json.Contains("\n") || json.Contains("\r\n"));
         Assert.Contains("\"formatVersion\"", json);
     }
 

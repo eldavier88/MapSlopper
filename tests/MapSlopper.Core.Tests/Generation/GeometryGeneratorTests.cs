@@ -53,7 +53,8 @@ public class GeometryGeneratorTests
         Assert.NotNull(result.Document);
         var doc = result.Document!;
 
-        var startCount = doc.Entities.Count(e => e.Properties.GetValueOrDefault("classname") == "info_player_start");
+        var startCount = doc.Entities.Count(e =>
+            e.Properties.TryGetValue("classname", out var c) && c == "info_player_start");
         Assert.Equal(1, startCount);
 
         // Worldspawn must contain the 4 walls + a number of floor & ceiling pieces.

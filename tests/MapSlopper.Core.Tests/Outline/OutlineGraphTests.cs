@@ -1,5 +1,6 @@
 using MapSlopper.Core.Geometry;
 using MapSlopper.Core.Outline;
+using Xunit;
 
 namespace MapSlopper.Core.Tests.Outline;
 

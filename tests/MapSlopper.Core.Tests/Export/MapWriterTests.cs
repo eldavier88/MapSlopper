@@ -1,7 +1,9 @@
+using System;
 using System.IO;
 using MapSlopper.Core.Brushes;
 using MapSlopper.Core.Export;
 using MapSlopper.Core.Geometry;
+using Xunit;
 
 namespace MapSlopper.Core.Tests.Export;
 

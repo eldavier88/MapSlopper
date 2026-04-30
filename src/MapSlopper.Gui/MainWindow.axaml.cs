@@ -1,11 +1,12 @@
 using Avalonia.Controls;
+using Avalonia.Markup.Xaml;
 
 namespace MapSlopper.Gui;
 
-public partial class MainWindow : Window
+public class MainWindow : Window
 {
     public MainWindow()
     {
-        InitializeComponent();
+        AvaloniaXamlLoader.Load(this);
     }
 }

@@ -1,5 +1,6 @@
 using MapSlopper.Core.Geometry;
 using MapSlopper.Core.Heightmap;
+using Xunit;
 
 namespace MapSlopper.Core.Tests.Heightmap;
 
