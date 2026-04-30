@@ -45,8 +45,17 @@ public static class GeometryGenerator
         var ws = doc.Worldspawn;
 
         // Floor & ceiling.
+        // CeilingHeight is interpreted as the floor-to-ceiling CLEARANCE: the
+        // absolute ceiling Z is automatically placed `CeilingHeight` units above
+        // the highest painted floor cell that the polygon covers. This keeps
+        // the room interior usable regardless of the paint values used and
+        // matches the user's mental model of "the ceiling sits N units above
+        // the highest floor".
         var floorBase = -project.FloorBaseThickness;
-        var ceilingBottom = project.CeilingHeight;
+        var maxFloorTop = ScanMaxFloorTopInsidePolygon(poly, project.Heightmap, floorBase);
+        // Fall back to floorBase when nothing was painted so we still emit walls/ceiling.
+        if (maxFloorTop < floorBase) maxFloorTop = floorBase;
+        var ceilingBottom = maxFloorTop + project.CeilingHeight;
         var floorCeil = FloorCeilingGenerator.Generate(
             poly, project.Heightmap,
             zFloorBase: floorBase,
@@ -88,5 +97,37 @@ public static class GeometryGenerator
 
         result.Document = doc;
         return result;
+    }
+
+    /// <summary>
+    /// Returns the highest absolute floor-top Z over heightmap cells whose
+    /// center lies inside the polygon. Returns <paramref name="zFloorBase"/>
+    /// when no such cell has a non-zero paint value.
+    /// </summary>
+    private static double ScanMaxFloorTopInsidePolygon(
+        Polygon2D poly,
+        MapSlopper.Core.Heightmap.Heightmap16 hm,
+        double zFloorBase)
+    {
+        var (pMin, pMax) = poly.Bounds();
+        var (oMin, _) = hm.WorldBounds();
+        var cs = hm.CellSize;
+        var cx0 = Math.Max(0, (int)Math.Floor((pMin.X - oMin.X) / cs));
+        var cy0 = Math.Max(0, (int)Math.Floor((pMin.Y - oMin.Y) / cs));
+        var cx1 = Math.Min(hm.Width - 1, (int)Math.Floor((pMax.X - oMin.X) / cs));
+        var cy1 = Math.Min(hm.Height - 1, (int)Math.Floor((pMax.Y - oMin.Y) / cs));
+        ushort maxRaw = 0;
+        for (var cy = cy0; cy <= cy1; cy++)
+        for (var cx = cx0; cx <= cx1; cx++)
+        {
+            var raw = hm.Sample(cx, cy);
+            if (raw <= maxRaw) continue;
+            // Only count cells whose center actually lies inside the polygon.
+            var center = new Vec2(
+                oMin.X + (cx + 0.5) * cs,
+                oMin.Y + (cy + 0.5) * cs);
+            if (poly.ContainsPoint(center)) maxRaw = raw;
+        }
+        return zFloorBase + maxRaw;
     }
 }

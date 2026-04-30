@@ -23,9 +23,13 @@ public sealed class MapSlopperProject
     /// <summary>Outward thickness of the exterior wall band (game units).</summary>
     public double WallThickness { get; set; } = 16.0;
 
-    public string FloorTexture { get; set; } = "common/caulk";
-    public string WallTexture { get; set; } = "common/caulk";
-    public string CeilingTexture { get; set; } = "common/caulk";
+    // Default to standard baseq3 textures so q3map2 emits visible surfaces
+    // and the map opens with renderable geometry in NetRadiant. caulk is a
+    // nodraw tool shader and would be stripped by q3map2 -- leaving an empty
+    // BSP with zero surfaces.
+    public string FloorTexture { get; set; } = "base_floor/clang_floor";
+    public string WallTexture { get; set; } = "base_wall/atech1_4";
+    public string CeilingTexture { get; set; } = "base_ceiling/ceil1_3";
 
     /// <summary>If set, used as info_player_start origin instead of polygon centroid.</summary>
     public Vec3? PlayerStartOverride { get; set; }
