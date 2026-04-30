@@ -7,34 +7,57 @@ using MapSlopper.Core.Heightmap;
 namespace MapSlopper.Core.Generation;
 
 /// <summary>
-/// Floor + ceiling brush generation for an arbitrary simple CCW polygon
-/// (convex OR non-convex) and an underlying heightmap. Q3 brushes must be
-/// convex, so we first decompose the polygon into convex pieces using
-/// Hertel-Mehlhorn (PolygonDecomposer.ConvexDecompose).
+/// Generates floor + ceiling brushes for a (possibly non-convex) simple
+/// CCW polygon using the cell-clip-then-merge algorithm:
 ///
-/// Per convex piece:
-///   * Ceiling: ONE prism shaped like the piece.
-///   * Floor: scan the cells whose centre lies inside the piece. If every
-///     such cell shares the SAME non-zero height, emit ONE prism shaped
-///     like the piece (the user's "big slab" preference). Otherwise
-///     iteratively extract the LARGEST axis-aligned rectangle of uniform
-///     height (histogram-stack algorithm), emit one prism per rectangle
-///     clipped against the piece. "Largest first" keeps wide rectangular
-///     interiors intact while pushing thin variations to leftover cells
-///     along edges.
+///   1. Decompose the polygon into convex pieces (Hertel-Mehlhorn). Q3
+///      requires convex brushes, so this step is mandatory whenever the
+///      outline has reflex vertices.
+///   2. For each convex piece P:
+///        a. Quantize every heightmap cell's raw value to <see cref="HeightQuantStep"/>
+///           and clamp to the floor-base / ceiling envelope. Quantization
+///           collapses paint-brush falloff gradients (e.g. raw = 1, 13, 64,
+///           125 from a single brush stroke) into a small number of
+///           intentional levels. Without it the per-value rectangle
+///           extraction explodes into hundreds of slivers.
+///        b. For every cell whose AABB intersects P, clip P against the
+///           cell-AABB to produce a small convex polygon, tag with that
+///           cell's quantized value.
+///        c. Iteratively merge adjacent same-value pieces while the union
+///           remains convex (PolygonDecomposer.TryMergeConvexPolygons).
+///           Same-value cells inside the piece collapse back into one big
+///           polygon that follows the piece boundary cleanly. Cells of
+///           different values stay separated by their cell-edge boundary.
+///        d. Emit one floor brush + one ceiling brush per remaining (poly,
+///           value) — both share the same xy footprint so floor and ceiling
+///           subdivide identically (per the user's spec).
 ///
-/// Wall ring is generated separately; this module only emits floor/ceiling.
+/// The "cells whose AABB intersects P" rule (rather than "centre inside P")
+/// guarantees the union of cell-clipped polygons exactly tiles P with no
+/// gaps -- essential for q3map2 leak-free compilation.
 /// </summary>
 public static class FloorCeilingGenerator
 {
+    /// <summary>
+    /// Quantization step for raw heightmap values, in Q3 units. 16 keeps
+    /// the natural Q3 grid resolution while collapsing brush-falloff
+    /// gradients into discrete levels.
+    /// </summary>
+    public const ushort HeightQuantStep = 16;
+
+    /// <summary>
+    /// Minimum value (in raw units) the quantizer outputs. Equal to the
+    /// project's floor base thickness so unpainted cells still get a
+    /// "ground level" floor at z = zFloorBase + thickness = 0. Without
+    /// this, unpainted cells inside the polygon would be holes -> guaranteed
+    /// q3map2 leak.
+    /// </summary>
     public sealed class Result
     {
         public List<Brush> FloorBrushes { get; } = new();
         public List<Brush> CeilingBrushes { get; } = new();
         public List<string> Warnings { get; } = new();
     }
-
-    private const ushort SentinelOutside = ushort.MaxValue;
 
     public static Result Generate(
         Polygon2D ccwPolygon,
@@ -56,6 +79,13 @@ public static class FloorCeilingGenerator
         var result = new Result();
         const double MinFloorCeilingGap = 8.0;
         var maxFloorTopAllowed = zCeilingBottom - MinFloorCeilingGap;
+        // Minimum quantized value -> guarantees every cell gets a floor
+        // brush of non-zero thickness so the polygon interior is always
+        // hermetically covered. Using zFloorBase as the bottom of every
+        // floor brush, the minimum top must be > zFloorBase. Use the next
+        // quantization step.
+        var minQuant = (ushort)Math.Max((int)HeightQuantStep, 1);
+        var maxRawAllowed = (ushort)Math.Max(0, Math.Min(ushort.MaxValue, (int)Math.Floor(maxFloorTopAllowed - zFloorBase)));
 
         var pieces = PolygonDecomposer.ConvexDecompose(ccwPolygon.Vertices);
         if (pieces.Count == 0)
@@ -64,30 +94,33 @@ public static class FloorCeilingGenerator
             return result;
         }
 
-        // Ceiling: one prism per convex piece.
-        foreach (var piece in pieces)
-        {
-            result.CeilingBrushes.Add(BrushFactory.MakeVerticalPrism(
-                piece, zCeilingBottom, zCeilingBottom + ceilingThickness,
-                sideTexture: wallTexture,
-                topTexture: ceilingTexture,
-                bottomTexture: ceilingTexture));
-        }
-
-        // Floor: per piece.
-        var clampedCells = 0;
-        ushort clampedMaxRaw = 0;
         var (oMin, _) = heightmap.WorldBounds();
         var cs = heightmap.CellSize;
+        var clampedCells = 0;
+        ushort clampedMaxRaw = 0;
 
         foreach (var piece in pieces)
         {
-            EmitFloorForPiece(
+            var regions = ComputeRegionsForPiece(
                 piece, heightmap, oMin, cs,
-                zFloorBase, maxFloorTopAllowed,
-                floorTexture, wallTexture,
-                result.FloorBrushes,
+                minQuant, maxRawAllowed,
                 ref clampedCells, ref clampedMaxRaw);
+
+            foreach (var (footprint, raw) in regions)
+            {
+                var floorTop = zFloorBase + raw;
+                if (floorTop <= zFloorBase) continue;
+                result.FloorBrushes.Add(BrushFactory.MakeVerticalPrism(
+                    footprint, zFloorBase, floorTop,
+                    sideTexture: wallTexture,
+                    topTexture: floorTexture,
+                    bottomTexture: floorTexture));
+                result.CeilingBrushes.Add(BrushFactory.MakeVerticalPrism(
+                    footprint, zCeilingBottom, zCeilingBottom + ceilingThickness,
+                    sideTexture: wallTexture,
+                    topTexture: ceilingTexture,
+                    bottomTexture: ceilingTexture));
+            }
         }
 
         if (clampedCells > 0)
@@ -99,102 +132,109 @@ public static class FloorCeilingGenerator
         return result;
     }
 
-    private static void EmitFloorForPiece(
-        List<Vec2> piece, Heightmap16 hm, Vec2 oMin, double cs,
-        double zFloorBase, double maxFloorTopAllowed,
-        string floorTexture, string wallTexture,
-        List<Brush> floorBrushes,
-        ref int clampedCells, ref ushort clampedMaxRaw)
+    /// <summary>
+    /// Cell-clip + merge: tile the convex piece with cell-clipped polygons
+    /// tagged by quantized height, then greedily merge same-value adjacent
+    /// pieces while convex. Returns the final list of (footprint, rawHeight)
+    /// pairs whose footprints exactly tile the input piece.
+    /// </summary>
+    private static List<(List<Vec2> Footprint, ushort RawHeight)> ComputeRegionsForPiece(
+        List<Vec2> piece,
+        Heightmap16 hm,
+        Vec2 oMin,
+        double cs,
+        ushort minQuant,
+        ushort maxRawAllowed,
+        ref int clampedCells,
+        ref ushort clampedMaxRaw)
     {
-        // Bounding box of this convex piece in cell coords.
+        var output = new List<(List<Vec2>, ushort)>();
         var (pMin, pMax) = ComputeBounds(piece);
-        var cx0 = Math.Max(0, (int)Math.Floor((pMin.X - oMin.X) / cs));
-        var cy0 = Math.Max(0, (int)Math.Floor((pMin.Y - oMin.Y) / cs));
-        var cx1 = Math.Min(hm.Width - 1, (int)Math.Floor((pMax.X - oMin.X) / cs));
-        var cy1 = Math.Min(hm.Height - 1, (int)Math.Floor((pMax.Y - oMin.Y) / cs));
-        if (cx1 < cx0 || cy1 < cy0) return;
 
-        var w = cx1 - cx0 + 1;
-        var h = cy1 - cy0 + 1;
-        var heights = new ushort[w * h];
-        var anyNonZero = false;
-        ushort firstNonZero = 0;
-        var allSame = true;
+        // Cell index range covering the piece's AABB. Use floor/ceil so we
+        // pick up cells whose AABB merely TOUCHES the piece on an edge.
+        var cx0 = (int)Math.Floor((pMin.X - oMin.X) / cs);
+        var cy0 = (int)Math.Floor((pMin.Y - oMin.Y) / cs);
+        var cx1 = (int)Math.Floor((pMax.X - oMin.X) / cs);
+        var cy1 = (int)Math.Floor((pMax.Y - oMin.Y) / cs);
+        cx0 = Math.Max(0, cx0); cy0 = Math.Max(0, cy0);
+        cx1 = Math.Min(hm.Width - 1, cx1); cy1 = Math.Min(hm.Height - 1, cy1);
+        if (cx1 < cx0 || cy1 < cy0) return output;
 
-        for (var dy = 0; dy < h; dy++)
-        for (var dx = 0; dx < w; dx++)
+        var pieces = new List<(List<Vec2> Poly, ushort RawHeight)>();
+        for (var cy = cy0; cy <= cy1; cy++)
+        for (var cx = cx0; cx <= cx1; cx++)
         {
-            var center = new Vec2(
-                oMin.X + (cx0 + dx + 0.5) * cs,
-                oMin.Y + (cy0 + dy + 0.5) * cs);
-            if (!ConvexContains(piece, center))
-            {
-                heights[dy * w + dx] = SentinelOutside;
-                continue;
-            }
-            var raw = hm.Sample(cx0 + dx, cy0 + dy);
-            var floorTop = zFloorBase + raw;
-            if (floorTop > maxFloorTopAllowed)
+            var cellMinX = oMin.X + cx * cs;
+            var cellMinY = oMin.Y + cy * cs;
+            var cellMaxX = cellMinX + cs;
+            var cellMaxY = cellMinY + cs;
+            var clipped = RectangleClipper.Clip(piece, cellMinX, cellMinY, cellMaxX, cellMaxY);
+            clipped = RectangleClipper.RemoveDegenerate(clipped);
+            if (clipped.Count < 3) continue;
+            // Skip near-zero-area slivers from numerical noise.
+            if (PolygonArea(clipped) < cs * cs * 1e-4) continue;
+
+            var raw = hm.Sample(cx, cy);
+            // Clamp above ceiling.
+            if (raw > maxRawAllowed)
             {
                 clampedCells++;
                 if (raw > clampedMaxRaw) clampedMaxRaw = raw;
-                raw = (ushort)Math.Max(0, maxFloorTopAllowed - zFloorBase);
-                if (raw == SentinelOutside) raw = (ushort)(SentinelOutside - 1);
+                raw = maxRawAllowed;
             }
-            heights[dy * w + dx] = raw;
-            if (raw != 0)
-            {
-                if (!anyNonZero) { firstNonZero = raw; anyNonZero = true; }
-                else if (raw != firstNonZero) allSame = false;
-            }
-            else
-            {
-                // Zero-cells inside polygon mean "no floor here". Treat as a
-                // non-uniform piece so we don't emit a slab over them.
-                allSame = false;
-            }
+            // Quantize.
+            var q = (ushort)((raw + HeightQuantStep / 2) / HeightQuantStep * HeightQuantStep);
+            // Clamp lower bound.
+            if (q < minQuant) q = minQuant;
+            if (q > maxRawAllowed) q = maxRawAllowed;
+            pieces.Add((clipped, q));
         }
 
-        if (!anyNonZero) return; // entire piece has zero floor; nothing to emit
-
-        // FAST PATH: every interior cell has the same non-zero height ->
-        // emit one prism shaped exactly like the piece. Keeps convex
-        // uniform-floor maps at the optimal N+2 brush count.
-        if (allSame)
+        // Greedy merge: iterate until nothing more can be combined.
+        // Repeatedly pick any pair of polygons sharing an edge with the
+        // same height value, merge if their union remains convex.
+        var changed = true;
+        while (changed)
         {
-            floorBrushes.Add(BrushFactory.MakeVerticalPrism(
-                piece, zFloorBase, zFloorBase + firstNonZero,
-                sideTexture: wallTexture,
-                topTexture: floorTexture,
-                bottomTexture: floorTexture));
-            return;
+            changed = false;
+            for (var a = 0; a < pieces.Count && !changed; a++)
+            {
+                for (var b = a + 1; b < pieces.Count && !changed; b++)
+                {
+                    if (pieces[a].RawHeight != pieces[b].RawHeight) continue;
+                    if (!PolygonDecomposer.TryMergeConvexPolygons(pieces[a].Poly, pieces[b].Poly, out var merged))
+                        continue;
+                    // Prune collinear vertices on the merged result. Two
+                    // adjacent cell-clipped polygons may share a boundary
+                    // composed of multiple collinear cell-edge segments;
+                    // TryMergeConvexPolygons only removes ONE shared edge,
+                    // so without this prune the polygon retains duplicate
+                    // vertices at every cell-corner along the shared side
+                    // and a subsequent merge attempt with a third polygon
+                    // would fail to find a unique shared edge -> floor brush
+                    // ends up with hundreds of redundant side faces and a
+                    // bad-normal/MAX_BUILD_SIDES q3map2 error.
+                    var simplified = RectangleClipper.RemoveDegenerate(merged);
+                    if (simplified.Count < 3) continue;
+                    pieces[a] = (simplified, pieces[a].RawHeight);
+                    pieces.RemoveAt(b);
+                    changed = true;
+                }
+            }
         }
 
-        // GENERAL PATH: greedy "largest uniform rectangle first".
-        var consumed = new bool[w * h];
-        while (true)
+        foreach (var p in pieces)
         {
-            var best = LargestUniformRectangle(heights, consumed, w, h);
-            if (best is null) break;
-            var r = best.Value;
-            for (var yy = r.y0; yy <= r.y1; yy++)
-                for (var xx = r.x0; xx <= r.x1; xx++)
-                    consumed[yy * w + xx] = true;
-
-            var rxMin = oMin.X + (cx0 + r.x0) * cs;
-            var ryMin = oMin.Y + (cy0 + r.y0) * cs;
-            var rxMax = oMin.X + (cx0 + r.x1 + 1) * cs;
-            var ryMax = oMin.Y + (cy0 + r.y1 + 1) * cs;
-            var clipped = RectangleClipper.Clip(piece, rxMin, ryMin, rxMax, ryMax);
-            clipped = RectangleClipper.RemoveDegenerate(clipped);
-            if (clipped.Count < 3) continue;
-            var floorTop = zFloorBase + r.height;
-            floorBrushes.Add(BrushFactory.MakeVerticalPrism(
-                clipped, zFloorBase, floorTop,
-                sideTexture: wallTexture,
-                topTexture: floorTexture,
-                bottomTexture: floorTexture));
+            // Strip collinear vertices that accumulated from merging
+            // cell-clipped polygons -- otherwise the piece's straight edge
+            // gets one vertex per cell crossing and the resulting brush
+            // exceeds q3map2's MAX_BUILD_SIDES.
+            var pruned = RectangleClipper.RemoveDegenerate(p.Poly);
+            if (pruned.Count < 3) continue;
+            output.Add((pruned, p.RawHeight));
         }
+        return output;
     }
 
     private static (Vec2 Min, Vec2 Max) ComputeBounds(List<Vec2> poly)
@@ -211,82 +251,15 @@ public static class FloorCeilingGenerator
         return (new Vec2(minX, minY), new Vec2(maxX, maxY));
     }
 
-    /// <summary>
-    /// Convex CCW polygon containment: point is inside iff it sits to the
-    /// LEFT of every edge (or on it). Faster + simpler than ray-casting.
-    /// </summary>
-    private static bool ConvexContains(List<Vec2> ccw, Vec2 p)
+    private static double PolygonArea(IReadOnlyList<Vec2> poly)
     {
-        var n = ccw.Count;
-        for (var i = 0; i < n; i++)
+        double a = 0;
+        for (var i = 0; i < poly.Count; i++)
         {
-            var a = ccw[i];
-            var b = ccw[(i + 1) % n];
-            var cr = (b.X - a.X) * (p.Y - a.Y) - (b.Y - a.Y) * (p.X - a.X);
-            if (cr < -1e-9) return false;
+            var p = poly[i];
+            var q = poly[(i + 1) % poly.Count];
+            a += p.X * q.Y - q.X * p.Y;
         }
-        return true;
-    }
-
-    private static (int x0, int y0, int x1, int y1, ushort height)? LargestUniformRectangle(
-        ushort[] heights, bool[] consumed, int w, int h)
-    {
-        var distinct = new HashSet<ushort>();
-        for (var i = 0; i < heights.Length; i++)
-        {
-            if (consumed[i]) continue;
-            var v = heights[i];
-            if (v == 0 || v == SentinelOutside) continue;
-            distinct.Add(v);
-        }
-        if (distinct.Count == 0) return null;
-
-        (int x0, int y0, int x1, int y1, ushort h) bestRect = (0, 0, -1, -1, 0);
-        var bestArea = 0;
-        var heightsCol = new int[w];
-        foreach (var v in distinct)
-        {
-            for (var x = 0; x < w; x++) heightsCol[x] = 0;
-            for (var y = 0; y < h; y++)
-            {
-                for (var x = 0; x < w; x++)
-                {
-                    var idx = y * w + x;
-                    if (!consumed[idx] && heights[idx] == v) heightsCol[x]++;
-                    else heightsCol[x] = 0;
-                }
-                LargestInHistogram(heightsCol, w, y, v, ref bestRect, ref bestArea);
-            }
-        }
-        if (bestArea == 0) return null;
-        return bestRect;
-    }
-
-    private static void LargestInHistogram(
-        int[] bars, int w, int rowBaseline, ushort heightValue,
-        ref (int x0, int y0, int x1, int y1, ushort h) bestRect,
-        ref int bestArea)
-    {
-        var stackIdx = new int[w + 1];
-        var top = -1;
-        for (var i = 0; i <= w; i++)
-        {
-            var bar = i == w ? 0 : bars[i];
-            while (top >= 0 && bars[stackIdx[top]] > bar)
-            {
-                var hVal = bars[stackIdx[top]];
-                top--;
-                var left = top < 0 ? 0 : stackIdx[top] + 1;
-                var right = i - 1;
-                var width = right - left + 1;
-                var area = hVal * width;
-                if (area > bestArea)
-                {
-                    bestArea = area;
-                    bestRect = (left, rowBaseline - hVal + 1, right, rowBaseline, heightValue);
-                }
-            }
-            stackIdx[++top] = i;
-        }
+        return Math.Abs(a) * 0.5;
     }
 }

@@ -121,6 +121,18 @@ public static class PolygonDecomposer
     }
 
     private static bool TryMergeConvex(List<Vec2> A, List<Vec2> B, out List<Vec2> merged)
+        => TryMergeConvexImpl(A, B, out merged);
+
+    /// <summary>
+    /// Attempt to merge two CCW polygons that share an edge into a single
+    /// convex CCW polygon. Returns false if no shared edge exists, or if the
+    /// merged polygon would be non-convex. Public so other generators can
+    /// use the same primitive (e.g. cell-clipped same-height polygons).
+    /// </summary>
+    public static bool TryMergeConvexPolygons(List<Vec2> A, List<Vec2> B, out List<Vec2> merged)
+        => TryMergeConvexImpl(A, B, out merged);
+
+    private static bool TryMergeConvexImpl(List<Vec2> A, List<Vec2> B, out List<Vec2> merged)
     {
         merged = null!;
         // Find a shared edge (B has edge bj→bj+1 that equals ai+1→ai in A
