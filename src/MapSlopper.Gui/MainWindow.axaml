@@ -1,9 +1,69 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        xmlns:local="clr-namespace:MapSlopper.Gui"
         x:Class="MapSlopper.Gui.MainWindow"
-        Title="MapSlopper.Gui">
-    Welcome to Avalonia!
+        Width="1200" Height="800"
+        Title="MapSlopper">
+    <DockPanel LastChildFill="True">
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Name="MenuNew" Header="_New" InputGesture="Ctrl+N" />
+                <MenuItem Name="MenuOpen" Header="_Open..." InputGesture="Ctrl+O" />
+                <MenuItem Name="MenuSave" Header="_Save" InputGesture="Ctrl+S" />
+                <MenuItem Name="MenuSaveAs" Header="Save _As..." InputGesture="Ctrl+Shift+S" />
+                <Separator />
+                <MenuItem Name="MenuExport" Header="_Export .map..." InputGesture="Ctrl+E" />
+                <Separator />
+                <MenuItem Name="MenuExit" Header="E_xit" />
+            </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Name="MenuUndo" Header="_Undo" InputGesture="Ctrl+Z" />
+                <MenuItem Name="MenuRedo" Header="_Redo" InputGesture="Ctrl+Y" />
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem Name="MenuLevels" Header="_Levels..." />
+                <MenuItem Name="MenuFrame" Header="_Frame Project" InputGesture="F" />
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Name="MenuAbout" Header="_About" />
+            </MenuItem>
+        </Menu>
+
+        <Border DockPanel.Dock="Bottom" Background="#222" Padding="6,3">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <TextBlock Grid.Column="0" Name="StatusText" Text="Ready." Foreground="#DDD" />
+                <TextBlock Grid.Column="1" Name="UndoState" Text="Undo:0 Redo:0" Foreground="#AAA" Margin="12,0" />
+                <TextBlock Grid.Column="2" Name="ClosedState" Text="Closed: no" Foreground="#AAA" Margin="12,0" />
+                <TextBlock Grid.Column="3" Text="MapSlopper Phase 8" Foreground="#666" Margin="12,0,0,0" />
+            </Grid>
+        </Border>
+
+        <StackPanel DockPanel.Dock="Left" Width="120" Background="#181818" Spacing="2">
+            <TextBlock Text="Tools" Foreground="#888" Margin="6,6,6,2" />
+            <Button Name="ToolBtn1" Content="1: Add Point" HorizontalAlignment="Stretch" />
+            <Button Name="ToolBtn2" Content="2: Insert Edge" HorizontalAlignment="Stretch" />
+            <Button Name="ToolBtn3" Content="3: Move Point" HorizontalAlignment="Stretch" />
+            <Button Name="ToolBtn4" Content="4: Erase Edge" HorizontalAlignment="Stretch" />
+            <Button Name="ToolBtn5" Content="5: Connect" HorizontalAlignment="Stretch" />
+            <Button Name="ToolBtn6" Content="6: Remove Point" HorizontalAlignment="Stretch" />
+            <Button Name="ToolBtn7" Content="7: Height Brush" HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <Border DockPanel.Dock="Right" Width="220" Background="#181818" Padding="8">
+            <StackPanel Spacing="6">
+                <TextBlock Text="Active Tool" Foreground="#888" />
+                <TextBlock Name="ActiveToolText" Text="Add Point" Foreground="#DDD" />
+                <Separator />
+                <TextBlock Text="Brush size (cells)" Foreground="#888" />
+                <NumericUpDown Name="BrushSize" Minimum="1" Maximum="64" Value="1" Increment="1" />
+                <TextBlock Text="Paint value (0..65535)" Foreground="#888" />
+                <NumericUpDown Name="PaintValue" Minimum="0" Maximum="65535" Value="64" Increment="16" />
+                <Separator />
+                <TextBlock Name="CursorText" Text="Cursor: -" Foreground="#AAA" />
+                <TextBlock Text="Tip: middle-drag or Space+drag to pan, wheel to zoom." Foreground="#666" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <local:Editor2DControl Name="Canvas" />
+    </DockPanel>
 </Window>

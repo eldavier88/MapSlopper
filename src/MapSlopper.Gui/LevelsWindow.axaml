@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="MapSlopper.Gui.LevelsWindow"
+        Width="320" Height="200"
+        Title="Levels"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="12" RowDefinitions="Auto,Auto,Auto,*,Auto" ColumnDefinitions="120,*">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Display Min:" VerticalAlignment="Center" />
+        <NumericUpDown Grid.Row="0" Grid.Column="1" Name="MinUpDown"
+                       Minimum="0" Maximum="65535" Increment="16" />
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="Display Max:" VerticalAlignment="Center" Margin="0,8,0,0" />
+        <NumericUpDown Grid.Row="1" Grid.Column="1" Name="MaxUpDown"
+                       Minimum="0" Maximum="65535" Increment="16" Margin="0,8,0,0" />
+        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                   Text="Higher heightmap values appear brighter."
+                   Margin="0,12,0,0" Foreground="#888" />
+        <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                    Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Name="ResetButton" Content="Reset" />
+            <Button Name="CloseButton" Content="Close" />
+        </StackPanel>
+    </Grid>
+</Window>
