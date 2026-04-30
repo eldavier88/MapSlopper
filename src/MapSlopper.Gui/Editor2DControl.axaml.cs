@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Threading;
 using MapSlopper.Core.Geometry;
 using MapSlopper.Core.Heightmap;
 
@@ -40,6 +41,7 @@ public class Editor2DControl : UserControl
     private bool _isSpaceDown;
     private bool _isPanning;
     private Point _lastPanScreen;
+    private bool _hasAutoFramed;
 
     public void SetViewModel(EditorViewModel vm)
     {
@@ -95,6 +97,8 @@ public class Editor2DControl : UserControl
     {
         base.OnAttachedToVisualTree(e);
         Focus();
+        // Schedule an auto-frame after layout is complete so Bounds is non-zero.
+        Dispatcher.UIThread.Post(() => FrameProject(), DispatcherPriority.Loaded);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -213,6 +217,16 @@ public class Editor2DControl : UserControl
     {
         base.Render(ctx);
         if (_vm is null) return;
+
+        // If Bounds were zero when FrameProject() was first scheduled, auto-frame
+        // once valid bounds arrive (catches late-layout scenarios inside TabControl).
+        if (!_hasAutoFramed && Bounds.Width > 1 && Bounds.Height > 1)
+        {
+            _hasAutoFramed = true;
+            FrameProject();
+            return; // FrameProject() calls InvalidateVisual(); let the next Render draw.
+        }
+
         var bounds = new Rect(0, 0, Bounds.Width, Bounds.Height);
         ctx.FillRectangle(new SolidColorBrush(Color.FromRgb(0x20, 0x20, 0x20)), bounds);
 
@@ -366,12 +380,12 @@ public class Editor2DControl : UserControl
         ctx.DrawText(Brushes.LightSkyBlue, new Point(origin.X, origin.Y + 2), label);
     }
 
-    private static FormattedText MakeLabel(string text) => new()
-    {
-        Text = text,
-        Typeface = Typeface.Default,
-        FontSize = 11,
-        TextAlignment = TextAlignment.Left,
-        Constraint = new Size(double.PositiveInfinity, double.PositiveInfinity),
-    };
+    private static FormattedText MakeLabel(string text) =>
+        new FormattedText(
+            text,
+            Typeface.Default,
+            11,
+            TextAlignment.Left,
+            TextWrapping.NoWrap,
+            new Size(double.PositiveInfinity, double.PositiveInfinity));
 }

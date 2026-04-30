@@ -14,6 +14,7 @@ public class MainWindow : Window
     private EditorViewModel _vm = null!;
     private Editor2DControl _canvas = null!;
     private Preview3DControl _preview = null!;
+    private readonly Button[] _toolButtons = new Button[7];
 
     private TextBlock _statusText = null!;
     private TextBlock _undoState = null!;
@@ -74,15 +75,18 @@ public class MainWindow : Window
 
         UpdateBottomBar();
         UpdateActiveToolText();
+        UpdateToolButtons(0); // highlight first tool on startup
 
         Title = _vm.WindowTitle;
-        Opened += (_, _) => _canvas.FrameProject();
+        // FrameProject is now triggered by Editor2DControl.OnAttachedToVisualTree
+        // so Bounds are guaranteed to be valid.
     }
 
     private void WireToolButton(string name, int index)
     {
         var btn = this.FindControl<Button>(name);
         if (btn is null) return;
+        _toolButtons[index] = btn;
         btn.Click += (_, _) => SelectTool(index);
     }
 
@@ -91,6 +95,19 @@ public class MainWindow : Window
         if (index < 0 || index >= _vm.Tools.Length) return;
         _vm.ActiveTool = _vm.Tools[index];
         UpdateActiveToolText();
+        UpdateToolButtons(index);
+    }
+
+    private void UpdateToolButtons(int activeIndex)
+    {
+        for (var i = 0; i < _toolButtons.Length; i++)
+        {
+            var b = _toolButtons[i];
+            if (b is null) continue;
+            b.Background = i == activeIndex
+                ? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromRgb(0x00, 0x78, 0xD4))
+                : null; // null = use theme default
+        }
     }
 
     private void UpdateActiveToolText()
