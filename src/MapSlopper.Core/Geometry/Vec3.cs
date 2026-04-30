@@ -37,4 +37,17 @@ public readonly record struct Vec3(double X, double Y, double Z)
         a.X * b.Y - a.Y * b.X);
 
     public Vec2 Xy => new(X, Y);
+
+    public override string ToString() =>
+        $"({X.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+        $"{Y.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+        $"{Z.ToString(System.Globalization.CultureInfo.InvariantCulture)})";
+
+    private bool PrintMembers(System.Text.StringBuilder sb)
+    {
+        sb.Append("X = ").Append(X.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        sb.Append(", Y = ").Append(Y.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        sb.Append(", Z = ").Append(Z.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return true;
+    }
 }

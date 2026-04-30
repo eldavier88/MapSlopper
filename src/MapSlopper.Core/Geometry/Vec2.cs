@@ -39,4 +39,15 @@ public readonly record struct Vec2(double X, double Y)
 
     public static double Distance(Vec2 a, Vec2 b) => (a - b).Length;
     public static double DistanceSquared(Vec2 a, Vec2 b) => (a - b).LengthSquared;
+
+    public override string ToString() =>
+        $"({X.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+        $"{Y.ToString(System.Globalization.CultureInfo.InvariantCulture)})";
+
+    private bool PrintMembers(System.Text.StringBuilder sb)
+    {
+        sb.Append("X = ").Append(X.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        sb.Append(", Y = ").Append(Y.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return true;
+    }
 }
