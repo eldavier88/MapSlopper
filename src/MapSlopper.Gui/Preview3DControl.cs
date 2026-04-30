@@ -58,7 +58,7 @@ public sealed class Preview3DControl : Control
         ClipToBounds = true;
         _rebuildTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, OnRebuildTick);
         _rebuildTimer.Stop();
-        _renderTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(33), DispatcherPriority.Render, OnRenderTick);
+        _renderTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Background, OnRenderTick);
         _renderTimer.Start();
     }
 
@@ -354,40 +354,49 @@ public sealed class Preview3DControl : Control
             return;
         }
 
-        // World→camera transform.
-        var cosYaw = Math.Cos(-_yaw);
-        var sinYaw = Math.Sin(-_yaw);
-        var cosPitch = Math.Cos(-_pitch);
-        var sinPitch = Math.Sin(-_pitch);
+        // Camera basis: forward includes pitch, right is purely horizontal,
+        // up is right × forward (so it tilts with pitch the way a head does).
+        // Camera-space coords: (x = right component, y = up component,
+        // z = forward component). Points are visible when z > NearZ.
+        var forwardVec = new Vec3(
+            Math.Cos(_yaw) * Math.Cos(_pitch),
+            Math.Sin(_yaw) * Math.Cos(_pitch),
+            Math.Sin(_pitch));
+        var rightVec = new Vec3(Math.Sin(_yaw), -Math.Cos(_yaw), 0);
+        var upVec = Vec3.Cross(rightVec, forwardVec);
         var fovScale = 0.5 * bounds.Height / Math.Tan(FovY * 0.5);
 
         // Project all faces, depth-sort back-to-front, draw filled with simple shading.
         var projected = new List<(Point P1, Point P2, Point P3, double Depth, Color Color)>(_faces.Count);
+        var light = new Vec3(0.3, 0.5, 0.8).Normalized;
         foreach (var face in _faces)
         {
-            if (!ProjectVertex(face.A, cosYaw, sinYaw, cosPitch, sinPitch, fovScale, bounds, out var a)) continue;
-            if (!ProjectVertex(face.B, cosYaw, sinYaw, cosPitch, sinPitch, fovScale, bounds, out var b)) continue;
-            if (!ProjectVertex(face.C, cosYaw, sinYaw, cosPitch, sinPitch, fovScale, bounds, out var c)) continue;
+            var ca = ToCameraSpace(face.A, rightVec, upVec, forwardVec);
+            var cb = ToCameraSpace(face.B, rightVec, upVec, forwardVec);
+            var cc = ToCameraSpace(face.C, rightVec, upVec, forwardVec);
+            // Reject triangles entirely behind the near plane. (Partial
+            // clipping would be ideal but isn't critical for a preview.)
+            if (ca.Z < NearZ && cb.Z < NearZ && cc.Z < NearZ) continue;
+            // If any vertex is behind near plane, skip — avoids the spike
+            // artifacts a true software clipper would otherwise need.
+            if (ca.Z < NearZ || cb.Z < NearZ || cc.Z < NearZ) continue;
 
-            // Back-face cull using projected winding (we want CCW = front-facing).
-            var cross2 = (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X);
-            if (cross2 <= 0) continue;
+            var a = ProjectCam(ca, fovScale, bounds);
+            var b = ProjectCam(cb, fovScale, bounds);
+            var c = ProjectCam(cc, fovScale, bounds);
 
-            // Average camera-space depth for sorting.
-            var depthA = ToCameraSpace(face.A, cosYaw, sinYaw, cosPitch, sinPitch).X;
-            var depthB = ToCameraSpace(face.B, cosYaw, sinYaw, cosPitch, sinPitch).X;
-            var depthC = ToCameraSpace(face.C, cosYaw, sinYaw, cosPitch, sinPitch).X;
-            var avgDepth = (depthA + depthB + depthC) / 3.0;
+            // No back-face culling: BrushFaceBuilder uses Q3 CW-from-outside
+            // winding so a single global rule misclassifies half the faces.
+            // Two-sided Lambert below handles shading; painter's-algorithm
+            // sort handles overlap.
 
-            // Lambert shading with a fixed light direction.
+            var avgDepth = (ca.Z + cb.Z + cc.Z) / 3.0;
+
             var n = Vec3.Cross(face.B - face.A, face.C - face.A);
             var nLen = n.Length;
             if (nLen < 1e-9) continue;
             n /= nLen;
-            var light = new Vec3(0.3, 0.5, 0.8);
-            var lightLen = light.Length;
-            light /= lightLen;
-            var diffuse = Math.Max(0.15, Vec3.Dot(n, light));
+            var diffuse = 0.25 + 0.75 * Math.Abs(Vec3.Dot(n, light));
             var shaded = Color.FromRgb(
                 (byte)Math.Clamp(face.Color.R * diffuse, 0, 255),
                 (byte)Math.Clamp(face.Color.G * diffuse, 0, 255),
@@ -416,34 +425,20 @@ public sealed class Preview3DControl : Control
         context.DrawText(Brushes.LightGray, new Point(8, bounds.Height - 20), hud);
     }
 
-    private bool ProjectVertex(
-        Vec3 world, double cosYaw, double sinYaw, double cosPitch, double sinPitch,
-        double fovScale, Rect bounds, out Point screen)
+    private static Point ProjectCam(Vec3 cam, double fovScale, Rect bounds)
     {
-        var cam = ToCameraSpace(world, cosYaw, sinYaw, cosPitch, sinPitch);
-        // Camera looks down +X. Z is up. Y is right.
-        if (cam.X < NearZ)
-        {
-            screen = default;
-            return false;
-        }
-        var sx = bounds.Width * 0.5 + (cam.Y / cam.X) * fovScale;
-        var sy = bounds.Height * 0.5 - (cam.Z / cam.X) * fovScale;
-        screen = new Point(sx, sy);
-        return true;
+        var sx = bounds.Width * 0.5 + (cam.X / cam.Z) * fovScale;
+        var sy = bounds.Height * 0.5 - (cam.Y / cam.Z) * fovScale;
+        return new Point(sx, sy);
     }
 
-    private Vec3 ToCameraSpace(Vec3 world, double cosYaw, double sinYaw, double cosPitch, double sinPitch)
+    private Vec3 ToCameraSpace(Vec3 world, Vec3 rightVec, Vec3 upVec, Vec3 forwardVec)
     {
-        // 1. Translate by -camPos.
-        var t = world - _camPos;
-        // 2. Rotate by -yaw about Z (so camera forward becomes +X).
-        var x1 = t.X * cosYaw - t.Y * sinYaw;
-        var y1 = t.X * sinYaw + t.Y * cosYaw;
-        // 3. Rotate by -pitch about Y (so camera looks down +X with pitch=0 horizontal).
-        var x2 = x1 * cosPitch + t.Z * sinPitch;
-        var z2 = -x1 * sinPitch + t.Z * cosPitch;
-        return new Vec3(x2, y1, z2);
+        var rel = world - _camPos;
+        return new Vec3(
+            Vec3.Dot(rel, rightVec),
+            Vec3.Dot(rel, upVec),
+            Vec3.Dot(rel, forwardVec));
     }
 
     private readonly struct Face

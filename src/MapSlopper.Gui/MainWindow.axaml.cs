@@ -24,6 +24,10 @@ public class MainWindow : Window
     private NumericUpDown _brushSize = null!;
     private NumericUpDown _paintValue = null!;
     private HeightHistogramControl _histogram = null!;
+    private Slider _levelsMin = null!;
+    private Slider _levelsMax = null!;
+    private TextBlock _levelsMinText = null!;
+    private TextBlock _levelsMaxText = null!;
     private CheckBox _snapCheck = null!;
     private TextBlock _toolHint = null!;
     private bool _suppressClosePrompt;
@@ -57,12 +61,43 @@ public class MainWindow : Window
         _brushSize = this.FindControl<NumericUpDown>("BrushSize")!;
         _paintValue = this.FindControl<NumericUpDown>("PaintValue")!;
         _histogram = this.FindControl<HeightHistogramControl>("HeightHistogram")!;
+        _levelsMin = this.FindControl<Slider>("LevelsMinSlider")!;
+        _levelsMax = this.FindControl<Slider>("LevelsMaxSlider")!;
+        _levelsMinText = this.FindControl<TextBlock>("LevelsMinText")!;
+        _levelsMaxText = this.FindControl<TextBlock>("LevelsMaxText")!;
         _snapCheck = this.FindControl<CheckBox>("SnapCheck")!;
         _toolHint = this.FindControl<TextBlock>("ToolHintText")!;
 
         _canvas.SetViewModel(_vm);
         _preview.Bind(_vm);
         _histogram.Bind(_vm);
+
+        // Levels sliders: control the heightmap display gamma. Two-way wired
+        // to vm.Levels and the histogram control so the user can quickly
+        // dial in contrast against the live histogram.
+        _levelsMin.Value = _vm.Levels.DisplayMin;
+        _levelsMax.Value = _vm.Levels.DisplayMax;
+        UpdateLevelsText();
+        _levelsMin.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != Slider.ValueProperty) return;
+            var lo = (ushort)Math.Clamp((int)Math.Round(_levelsMin.Value), 0, 65535);
+            if (lo >= _vm.Levels.DisplayMax) lo = (ushort)Math.Max(0, _vm.Levels.DisplayMax - 1);
+            _vm.Levels.DisplayMin = lo;
+            UpdateLevelsText();
+            _histogram.InvalidateVisual();
+            _canvas.InvalidateVisual();
+        };
+        _levelsMax.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != Slider.ValueProperty) return;
+            var hi = (ushort)Math.Clamp((int)Math.Round(_levelsMax.Value), 0, 65535);
+            if (hi <= _vm.Levels.DisplayMin) hi = (ushort)Math.Min(65535, _vm.Levels.DisplayMin + 1);
+            _vm.Levels.DisplayMax = hi;
+            UpdateLevelsText();
+            _histogram.InvalidateVisual();
+            _canvas.InvalidateVisual();
+        };
 
         _snapCheck.IsChecked = _vm.SnapToGrid;
         _snapCheck.Checked += (_, _) => _vm.SnapToGrid = true;
@@ -92,6 +127,12 @@ public class MainWindow : Window
         Title = _vm.WindowTitle;
         // FrameProject is now triggered by Editor2DControl.OnAttachedToVisualTree
         // so Bounds are guaranteed to be valid.
+    }
+
+    private void UpdateLevelsText()
+    {
+        if (_levelsMinText is not null) _levelsMinText.Text = _vm.Levels.DisplayMin.ToString();
+        if (_levelsMaxText is not null) _levelsMaxText.Text = _vm.Levels.DisplayMax.ToString();
     }
 
     private void WireToolButton(string name, int index)

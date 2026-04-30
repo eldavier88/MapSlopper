@@ -28,15 +28,44 @@ public static class EntityPlacement
     {
         var entities = new List<MapEntity>();
 
-        // info_player_start. Default to polygon centroid; fall back to a
-        // polygon vertex if the centroid is outside (concave polygons).
-        var startXy = playerStartOverride ?? ccwPolygon.Centroid();
-        if (playerStartOverride is null && !ccwPolygon.ContainsPoint(startXy))
-            startXy = ccwPolygon.Vertices[0];
-        var (cx, cy) = heightmap.WorldToCell(startXy);
-        // Lift the player 24 units above the local floor top so they spawn
-        // standing on the floor brush rather than clipped into it.
-        var startZ = playerStartOverride3?.Z ?? (zFloorBase + heightmap.Sample(cx, cy) + 24);
+        // info_player_start: prefer the cell with the HIGHEST paint value
+        // whose center lies inside the polygon -- that guarantees the
+        // player spawns standing on actual generated floor at the room's
+        // peak (rather than the polygon centroid which may sit on the
+        // lowest part or even outside a non-convex shape). Falls back to
+        // centroid -> first vertex if no interior cell has a paint value.
+        Vec2 startXy;
+        ushort startRaw = 0;
+        if (playerStartOverride is not null)
+        {
+            startXy = playerStartOverride.Value;
+            var (ocx, ocy) = heightmap.WorldToCell(startXy);
+            startRaw = heightmap.Sample(ocx, ocy);
+        }
+        else
+        {
+            startXy = ccwPolygon.Centroid();
+            if (!ccwPolygon.ContainsPoint(startXy)) startXy = ccwPolygon.Vertices[0];
+            var (pMin, pMax) = ccwPolygon.Bounds();
+            var (oMin, _) = heightmap.WorldBounds();
+            var cs = heightmap.CellSize;
+            var cx0 = System.Math.Max(0, (int)System.Math.Floor((pMin.X - oMin.X) / cs));
+            var cy0 = System.Math.Max(0, (int)System.Math.Floor((pMin.Y - oMin.Y) / cs));
+            var cx1 = System.Math.Min(heightmap.Width - 1, (int)System.Math.Floor((pMax.X - oMin.X) / cs));
+            var cy1 = System.Math.Min(heightmap.Height - 1, (int)System.Math.Floor((pMax.Y - oMin.Y) / cs));
+            for (var yy = cy0; yy <= cy1; yy++)
+            for (var xx = cx0; xx <= cx1; xx++)
+            {
+                var raw = heightmap.Sample(xx, yy);
+                if (raw <= startRaw) continue;
+                var c = new Vec2(oMin.X + (xx + 0.5) * cs, oMin.Y + (yy + 0.5) * cs);
+                if (!ccwPolygon.ContainsPoint(c)) continue;
+                startRaw = raw;
+                startXy = c;
+            }
+        }
+        // Eye height: stand 24 units above the floor top at the chosen cell.
+        var startZ = playerStartOverride3?.Z ?? (zFloorBase + startRaw + 24);
         var player = new MapEntity();
         player.Properties["classname"] = "info_player_start";
         player.Properties["origin"] = FormatVec(startXy.X, startXy.Y, startZ);

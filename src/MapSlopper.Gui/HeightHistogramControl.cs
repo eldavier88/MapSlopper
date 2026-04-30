@@ -102,6 +102,21 @@ public sealed class HeightHistogramControl : Control
 
         if (_vm is not null)
         {
+            // Translucent band showing the active Display Levels range.
+            // Anything outside this band gets clamped to black/white when
+            // the heightmap is rendered, so visualising it inline tells the
+            // user how their slider tweaks affect contrast.
+            var loPx = (_vm.Levels.DisplayMin / 65535.0) * w;
+            var hiPx = (_vm.Levels.DisplayMax / 65535.0) * w;
+            if (hiPx > loPx)
+            {
+                var bandBrush = new SolidColorBrush(Color.FromArgb(56, 96, 220, 96));
+                ctx.DrawRectangle(bandBrush, null, new Rect(loPx, 0, hiPx - loPx, h));
+                var edgePen = new Pen(new SolidColorBrush(Color.FromArgb(180, 96, 220, 96)), 1);
+                ctx.DrawLine(edgePen, new Point(loPx, 0), new Point(loPx, h));
+                ctx.DrawLine(edgePen, new Point(hiPx, 0), new Point(hiPx, h));
+            }
+
             var px = (_vm.PaintValue / 65535.0) * w;
             var pen = new Pen(Brushes.OrangeRed, 1.5);
             ctx.DrawLine(pen, new Point(px, 0), new Point(px, h));

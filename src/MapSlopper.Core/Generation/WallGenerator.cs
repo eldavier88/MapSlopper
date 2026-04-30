@@ -17,16 +17,37 @@ public static class WallGenerator
 {
     public const double MaxMiterRatio = 4.0;
 
+    /// <summary>
+    /// Default overload: one shared <paramref name="zBottom"/> for every wall.
+    /// </summary>
     public static IReadOnlyList<Brush> Generate(
         Polygon2D ccwPolygon, double thickness, double zBottom, double zTop,
+        string sideTexture, string capTexture)
+        => GenerateInternal(ccwPolygon, thickness, _ => zBottom, zTop, sideTexture, capTexture);
+
+    /// <summary>
+    /// Per-edge overload: <paramref name="zBottomForEdge"/> is invoked once
+    /// per polygon edge index (0..N-1) and returns the z value to use as
+    /// that wall brush's bottom. Lets the caller drop wall bottoms only as
+    /// far as the adjacent floor requires (slim airtight overlap), avoiding
+    /// the huge wasted brush volume from a single common floor-base bottom.
+    /// </summary>
+    public static IReadOnlyList<Brush> Generate(
+        Polygon2D ccwPolygon, double thickness, Func<int, double> zBottomForEdge, double zTop,
+        string sideTexture, string capTexture)
+        => GenerateInternal(ccwPolygon, thickness, zBottomForEdge, zTop, sideTexture, capTexture);
+
+    private static IReadOnlyList<Brush> GenerateInternal(
+        Polygon2D ccwPolygon, double thickness, Func<int, double> zBottomForEdge, double zTop,
         string sideTexture, string capTexture)
     {
         if (!ccwPolygon.IsCcw())
             throw new ArgumentException("Polygon must be CCW.", nameof(ccwPolygon));
         if (thickness <= 0)
             throw new ArgumentException("thickness must be positive.", nameof(thickness));
-        if (zTop <= zBottom)
-            throw new ArgumentException("zTop must be > zBottom.");
+        if (zBottomForEdge is null)
+            throw new ArgumentNullException(nameof(zBottomForEdge));
+        if (zTop <= 0 && zTop <= 0) { /* zTop validated below per-edge */ }
 
         var n = ccwPolygon.Count;
         var verts = new Vec2[n];
@@ -79,6 +100,9 @@ public static class WallGenerator
             var footprint = new List<Vec2> { b, a, aOut, bOut };
             // Defensive: if degenerate / inverted, skip this brush rather than emit garbage.
             if (PolygonSignedArea(footprint) <= 0) continue;
+
+            var zBottom = zBottomForEdge(i);
+            if (zTop <= zBottom) continue; // skip degenerate
 
             var prism = BrushFactory.MakeVerticalPrism(
                 footprint, zBottom, zTop,

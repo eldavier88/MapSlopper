@@ -69,10 +69,42 @@ public static class GeometryGenerator
         foreach (var w in floorCeil.Warnings)
             result.Issues.Add(new Issue(w, false));
 
-        // Wall ring spans from floor base to ceiling top so floor & ceiling tuck snugly between walls.
+        // Wall ring bottoms: drop each wall down only as far as the
+        // adjacent floor requires (with a small overlap so the floor brush
+        // and wall brush share volume -> q3map2 stays leak-free). Scan a
+        // few cells just inside the polygon edge; take the MIN height of
+        // those cells (lowest neighbouring floor). Wall bottom z =
+        // zFloorBase + minHeight - overlap (clamped to >= zFloorBase).
+        const double WallFloorOverlap = 16.0;
         var wallTop = ceilingBottom + project.CeilingThickness;
+        double WallBottomFor(int edgeIndex)
+        {
+            var n = poly.Count;
+            var a = poly[edgeIndex];
+            var b = poly[(edgeIndex + 1) % n];
+            // Sample several points along the inner side of the edge.
+            var dir = (b - a).Normalized;
+            var inward = new Vec2(-dir.Y, dir.X); // CCW inward = left-perp of edge dir
+            var samples = 8;
+            ushort minRaw = ushort.MaxValue;
+            var found = false;
+            for (var s = 0; s <= samples; s++)
+            {
+                var t = (s + 0.5) / (samples + 1);
+                var px = a.X + (b.X - a.X) * t + inward.X * (project.Heightmap.CellSize * 0.5);
+                var py = a.Y + (b.Y - a.Y) * t + inward.Y * (project.Heightmap.CellSize * 0.5);
+                var (cx, cy) = project.Heightmap.WorldToCell(new Vec2(px, py));
+                if (cx < 0 || cy < 0 || cx >= project.Heightmap.Width || cy >= project.Heightmap.Height) continue;
+                if (!poly.ContainsPoint(new Vec2(px, py))) continue;
+                var raw = project.Heightmap.Sample(cx, cy);
+                if (raw < minRaw) { minRaw = raw; found = true; }
+            }
+            if (!found) return floorBase; // no interior cells found -> safe fallback
+            var z = floorBase + minRaw - WallFloorOverlap;
+            return Math.Max(floorBase, z);
+        }
         var walls = WallGenerator.Generate(
-            poly, project.WallThickness, floorBase, wallTop,
+            poly, project.WallThickness, WallBottomFor, wallTop,
             sideTexture: project.WallTexture,
             capTexture: project.WallTexture);
         ws.Brushes.AddRange(walls);
