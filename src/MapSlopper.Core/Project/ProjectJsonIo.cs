@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using MapSlopper.Core.Geometry;
 using MapSlopper.Core.Heightmap;
 using MapSlopper.Core.Outline;
+using MapSlopper.Core.Triggers;
 
 namespace MapSlopper.Core.Project;
 
@@ -34,6 +35,7 @@ public static class ProjectJsonIo
         o.Converters.Add(new Heightmap16Converter());
         o.Converters.Add(new Vec2Converter());
         o.Converters.Add(new Vec3Converter());
+        o.Converters.Add(new TriggerTypeConfigConverter());
         return o;
     }
 
@@ -269,6 +271,12 @@ internal sealed class MapSlopperProjectConverter : JsonConverter<MapSlopperProje
                 case "formatVersion": p.FormatVersion = reader.GetInt32(); break;
                 case "outline": p.Outline = JsonSerializer.Deserialize<OutlineGraph>(ref reader, o)!; break;
                 case "heightmap": p.Heightmap = JsonSerializer.Deserialize<Heightmap16>(ref reader, o)!; break;
+                case "triggerLayer": p.TriggerLayer = JsonSerializer.Deserialize<Heightmap16>(ref reader, o)!; break;
+                case "triggerOverrides":
+                    p.TriggerOverrides = reader.TokenType == JsonTokenType.Null
+                        ? null
+                        : JsonSerializer.Deserialize<TriggerTypeConfig>(ref reader, o);
+                    break;
                 case "ceilingHeight": p.CeilingHeight = reader.GetDouble(); break;
                 case "wallThickness": p.WallThickness = reader.GetDouble(); break;
                 case "floorTexture": p.FloorTexture = reader.GetString() ?? p.FloorTexture; break;
@@ -298,6 +306,11 @@ internal sealed class MapSlopperProjectConverter : JsonConverter<MapSlopperProje
         JsonSerializer.Serialize(w, p.Outline, o);
         w.WritePropertyName("heightmap");
         JsonSerializer.Serialize(w, p.Heightmap, o);
+        w.WritePropertyName("triggerLayer");
+        JsonSerializer.Serialize(w, p.TriggerLayer, o);
+        w.WritePropertyName("triggerOverrides");
+        if (p.TriggerOverrides is null) w.WriteNullValue();
+        else JsonSerializer.Serialize(w, p.TriggerOverrides, o);
         w.WriteNumber("ceilingHeight", p.CeilingHeight);
         w.WriteNumber("wallThickness", p.WallThickness);
         w.WriteString("floorTexture", p.FloorTexture);

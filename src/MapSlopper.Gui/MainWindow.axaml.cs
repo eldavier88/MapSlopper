@@ -5,7 +5,9 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.VisualTree;
+using MapSlopper.Core.Triggers;
 using MapSlopper.Gui.Tools;
 
 namespace MapSlopper.Gui;
@@ -15,7 +17,7 @@ public class MainWindow : Window
     private EditorViewModel _vm = null!;
     private Editor2DControl _canvas = null!;
     private Preview3DControl _preview = null!;
-    private readonly Button[] _toolButtons = new Button[7];
+    private readonly Button[] _toolButtons = new Button[8];
 
     private TextBlock _statusText = null!;
     private TextBlock _undoState = null!;
@@ -30,6 +32,8 @@ public class MainWindow : Window
     private TextBlock _levelsMaxText = null!;
     private CheckBox _snapCheck = null!;
     private TextBlock _toolHint = null!;
+    private TextBlock _triggerPaletteHeader = null!;
+    private StackPanel _triggerPalette = null!;
     private bool _suppressClosePrompt;
 
     public MainWindow()
@@ -67,6 +71,8 @@ public class MainWindow : Window
         _levelsMaxText = this.FindControl<TextBlock>("LevelsMaxText")!;
         _snapCheck = this.FindControl<CheckBox>("SnapCheck")!;
         _toolHint = this.FindControl<TextBlock>("ToolHintText")!;
+        _triggerPaletteHeader = this.FindControl<TextBlock>("TriggerPaletteHeader")!;
+        _triggerPalette = this.FindControl<StackPanel>("TriggerPalette")!;
 
         _canvas.SetViewModel(_vm);
         _preview.Bind(_vm);
@@ -119,6 +125,8 @@ public class MainWindow : Window
         WireToolButton("ToolBtn5", 4);
         WireToolButton("ToolBtn6", 5);
         WireToolButton("ToolBtn7", 6);
+        WireToolButton("ToolBtn8", 7);
+        BuildTriggerPalette();
 
         UpdateBottomBar();
         UpdateActiveToolText();
@@ -172,6 +180,88 @@ public class MainWindow : Window
     {
         _activeToolText.Text = _vm.ActiveTool.Name;
         if (_toolHint is not null) _toolHint.Text = _vm.ActiveTool.StatusHint(_vm) ?? string.Empty;
+        UpdateTriggerPaletteVisibility();
+    }
+
+    private void UpdateTriggerPaletteVisibility()
+    {
+        var visible = _vm.ActiveTool is TriggerBrushTool;
+        if (_triggerPalette is not null) _triggerPalette.IsVisible = visible;
+        if (_triggerPaletteHeader is not null) _triggerPaletteHeader.IsVisible = visible;
+    }
+
+    private void BuildTriggerPalette()
+    {
+        if (_triggerPalette is null) return;
+        _triggerPalette.Children.Clear();
+        foreach (var t in _vm.TriggerTypes.Types)
+        {
+            var typeId = t.Id; // closure capture
+            var color = TriggerBrushTool.ParseColor(t.ColorHex) ?? Colors.Gray;
+            var swatch = new Border
+            {
+                Width = 20,
+                Height = 20,
+                Background = new SolidColorBrush(color),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x30)),
+                BorderThickness = new Avalonia.Thickness(1),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            };
+            var label = new TextBlock
+            {
+                Text = $"{t.Id}: {t.Name}",
+                Foreground = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Margin = new Avalonia.Thickness(8, 0, 0, 0),
+            };
+            var row = new StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                Children = { swatch, label },
+            };
+            var btn = new Button
+            {
+                Content = row,
+                Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x30)),
+                Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x42)),
+                BorderThickness = new Avalonia.Thickness(1),
+                Padding = new Avalonia.Thickness(4, 3),
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Left,
+            };
+            btn.Click += (_, _) =>
+            {
+                _vm.ActiveTriggerTypeId = typeId;
+                // Auto-switch to the trigger brush tool so clicking a swatch
+                // is a one-click "paint this color" action.
+                var idx = Array.IndexOf(_vm.Tools, FindTool<TriggerBrushTool>());
+                if (idx >= 0) SelectTool(idx);
+                HighlightTriggerPaletteSelection();
+            };
+            _triggerPalette.Children.Add(btn);
+        }
+        HighlightTriggerPaletteSelection();
+    }
+
+    private IEditorTool? FindTool<T>() where T : IEditorTool
+    {
+        foreach (var t in _vm.Tools) if (t is T) return t;
+        return null;
+    }
+
+    private void HighlightTriggerPaletteSelection()
+    {
+        if (_triggerPalette is null) return;
+        for (var i = 0; i < _triggerPalette.Children.Count && i < _vm.TriggerTypes.Types.Count; i++)
+        {
+            if (_triggerPalette.Children[i] is not Button b) continue;
+            var isActive = _vm.TriggerTypes.Types[i].Id == _vm.ActiveTriggerTypeId;
+            b.BorderBrush = new SolidColorBrush(isActive
+                ? Color.FromRgb(0x1F, 0x8F, 0xE6)
+                : Color.FromRgb(0x3A, 0x3A, 0x42));
+            b.BorderThickness = new Avalonia.Thickness(isActive ? 2 : 1);
+        }
     }
 
     private void WireMenus()
@@ -228,6 +318,7 @@ public class MainWindow : Window
                 case Key.D5: case Key.NumPad5: SelectTool(4); e.Handled = true; break;
                 case Key.D6: case Key.NumPad6: SelectTool(5); e.Handled = true; break;
                 case Key.D7: case Key.NumPad7: SelectTool(6); e.Handled = true; break;
+                case Key.D8: case Key.NumPad8: SelectTool(7); e.Handled = true; break;
                 case Key.Escape:
                     _vm.ActiveTool.Reset();
                     _vm.SelectedPointId = null;
@@ -367,6 +458,10 @@ public class MainWindow : Window
             UpdateActiveToolText();
         if (e.PropertyName == nameof(EditorViewModel.StatusMessage))
             _statusText.Text = _vm.StatusMessage;
+        if (e.PropertyName == nameof(EditorViewModel.TriggerTypes))
+            BuildTriggerPalette();
+        if (e.PropertyName == nameof(EditorViewModel.ActiveTriggerTypeId))
+            HighlightTriggerPaletteSelection();
     }
 
     private void OnUndoChanged() => UpdateBottomBar();

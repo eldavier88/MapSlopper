@@ -1,0 +1,43 @@
+{
+  "types": [
+    {
+      "id": 1,
+      "name": "Start Timer",
+      "colorHex": "#33CC33",
+      "texture": "system/trigger",
+      "entityProperties": { "classname": "trigger_multiple" },
+      "targets": [
+        {
+          "linkKey": "target",
+          "properties": { "classname": "target_startTimer" }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Stop Timer",
+      "colorHex": "#CC3333",
+      "texture": "system/trigger",
+      "entityProperties": { "classname": "trigger_multiple" },
+      "targets": [
+        {
+          "linkKey": "target",
+          "properties": { "classname": "target_stopTimer" }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Checkpoint",
+      "colorHex": "#3366CC",
+      "texture": "system/trigger",
+      "entityProperties": { "classname": "trigger_multiple" },
+      "targets": [
+        {
+          "linkKey": "target",
+          "properties": { "classname": "target_checkpoint" }
+        }
+      ]
+    }
+  ]
+}

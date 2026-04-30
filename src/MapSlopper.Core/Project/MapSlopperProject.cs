@@ -1,6 +1,7 @@
 using MapSlopper.Core.Geometry;
 using MapSlopper.Core.Heightmap;
 using MapSlopper.Core.Outline;
+using MapSlopper.Core.Triggers;
 
 namespace MapSlopper.Core.Project;
 
@@ -16,6 +17,23 @@ public sealed class MapSlopperProject
 
     public OutlineGraph Outline { get; set; } = new();
     public Heightmap16 Heightmap { get; set; } = new(64, 64, 32, Vec2.Zero);
+
+    /// <summary>
+    /// Trigger paint layer. Same dimensions / origin / cell size as the
+    /// heightmap (kept in sync by the editor and the loader). Each cell
+    /// stores a <see cref="TriggerType.Id"/> in its low byte; 0 means
+    /// "no trigger". Painted same-id connected components become one
+    /// brush-model entity at export time.
+    /// </summary>
+    public Heightmap16 TriggerLayer { get; set; } = new(64, 64, 32, Vec2.Zero);
+
+    /// <summary>
+    /// Optional per-project overrides for the program-wide trigger type
+    /// config. Entries with the same <see cref="TriggerType.Id"/> as a
+    /// program-wide entry replace it; entries that exist only program-wide
+    /// remain available. Null means "use the program-wide config as-is".
+    /// </summary>
+    public TriggerTypeConfig? TriggerOverrides { get; set; }
 
     /// <summary>Z height of the ceiling (game units, top of interior space).</summary>
     public double CeilingHeight { get; set; } = 256.0;

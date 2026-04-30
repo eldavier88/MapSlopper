@@ -205,3 +205,40 @@ public sealed class HeightStrokeCmd : IUndoableCommand
         return true;
     }
 }
+
+/// <summary>
+/// Captures a full trigger-layer snapshot before/after a brush stroke,
+/// mirroring <see cref="HeightStrokeCmd"/>. Lives on its own so labelling
+/// in the undo history reads "Paint triggers" instead of "Paint heights".
+/// </summary>
+public sealed class TriggerStrokeCmd : IUndoableCommand
+{
+    private readonly Heightmap16 _layer;
+    private readonly ushort[] _before;
+    private readonly ushort[] _after;
+
+    public TriggerStrokeCmd(Heightmap16 layer, ushort[] before, ushort[] after)
+    {
+        if (before.Length != layer.Data.Length)
+            throw new ArgumentException("before length mismatch", nameof(before));
+        if (after.Length != layer.Data.Length)
+            throw new ArgumentException("after length mismatch", nameof(after));
+        _layer = layer;
+        _before = before;
+        _after = after;
+    }
+
+    public string Label => "Paint triggers";
+
+    public void Apply()
+    {
+        Array.Copy(_after, _layer.Data, _after.Length);
+        _layer.Set(0, 0, _layer.Data[0]);
+    }
+
+    public void Revert()
+    {
+        Array.Copy(_before, _layer.Data, _before.Length);
+        _layer.Set(0, 0, _layer.Data[0]);
+    }
+}

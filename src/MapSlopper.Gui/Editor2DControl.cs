@@ -238,6 +238,7 @@ public class Editor2DControl : Control
         DrawHeightmap(ctx);
         DrawGrid(ctx);
         DrawHeightmapBounds(ctx);
+        DrawTriggerLayer(ctx);
         DrawOutline(ctx);
         DrawPlayerReference(ctx);
 
@@ -337,6 +338,59 @@ public class Editor2DControl : Control
             var s = WorldToScreen(new Vec2(mn.X, y));
             var ft = MakeLabel(((int)Math.Round(y)).ToString(System.Globalization.CultureInfo.InvariantCulture));
             ctx.DrawText(labelBrush, new Point(s.X + 2, s.Y), ft);
+        }
+    }
+
+    /// <summary>
+    /// Render the trigger paint layer as semi-transparent colored cells on
+    /// top of the heightmap. Each cell's color comes from the matching
+    /// <see cref="MapSlopper.Core.Triggers.TriggerType.ColorHex"/> in
+    /// <see cref="EditorViewModel.TriggerTypes"/>; cells with id 0 or
+    /// unknown ids are skipped.
+    /// </summary>
+    private void DrawTriggerLayer(DrawingContext ctx)
+    {
+        if (_vm is null) return;
+        var tl = _vm.Project.TriggerLayer;
+        if (tl.Width == 0 || tl.Height == 0) return;
+        var types = _vm.TriggerTypes;
+        if (types.Types.Count == 0) return;
+
+        var viewMinW = ScreenToWorld(new Point(0, Bounds.Height));
+        var viewMaxW = ScreenToWorld(new Point(Bounds.Width, 0));
+        var (cx0, cy0) = tl.WorldToCell(viewMinW);
+        var (cx1, cy1) = tl.WorldToCell(viewMaxW);
+        cx0 = Math.Max(0, cx0 - 1);
+        cy0 = Math.Max(0, cy0 - 1);
+        cx1 = Math.Min(tl.Width - 1, cx1 + 1);
+        cy1 = Math.Min(tl.Height - 1, cy1 + 1);
+        if (cx0 > cx1 || cy0 > cy1) return;
+
+        var brushCache = new IBrush?[256];
+        for (var y = cy0; y <= cy1; y++)
+        {
+            for (var x = cx0; x <= cx1; x++)
+            {
+                var v = tl.Sample(x, y);
+                if (v == 0) continue;
+                var id = (byte)(v & 0xFF);
+                var brush = brushCache[id];
+                if (brush is null)
+                {
+                    var t = types.FindById(id);
+                    if (t is null) continue;
+                    var rgb = MapSlopper.Gui.Tools.TriggerBrushTool.ParseColor(t.ColorHex);
+                    if (rgb is null) continue;
+                    var c = rgb.Value;
+                    brush = new SolidColorBrush(Color.FromArgb(112, c.R, c.G, c.B));
+                    brushCache[id] = brush;
+                }
+                var min = tl.CellWorldMin(x, y);
+                var max = tl.CellWorldMax(x, y);
+                var a = WorldToScreen(new Vec2(min.X, max.Y));
+                var d = WorldToScreen(new Vec2(max.X, min.Y));
+                ctx.FillRectangle(brush, new Rect(a, d));
+            }
         }
     }
 

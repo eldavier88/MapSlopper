@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MapSlopper.Core.Brushes;
 using MapSlopper.Core.Geometry;
 using MapSlopper.Core.Project;
+using MapSlopper.Core.Triggers;
 
 namespace MapSlopper.Core.Generation;
 
@@ -127,6 +128,23 @@ public static class GeometryGenerator
             lightInsetFromCeiling: project.LightInsetFromCeiling);
         doc.Entities.AddRange(entities);
 
+        // Trigger brush-model entities (one per painted same-id connected
+        // component) plus their auto-spawned point-entity targets. Triggers
+        // span the FULL room height (from floor base to top of ceiling
+        // slab) so the player triggers them regardless of vertical
+        // position.
+        var triggerTypes = ResolveTriggerTypes(project);
+        if (triggerTypes.Types.Count > 0 && project.TriggerLayer.Width > 0 && project.TriggerLayer.Height > 0)
+        {
+            var triggers = TriggerGenerator.Generate(
+                poly, project.TriggerLayer, triggerTypes,
+                zFloorBase: floorBase,
+                zCeilingTop: wallTop);
+            doc.Entities.AddRange(triggers.Entities);
+            foreach (var w in triggers.Warnings)
+                result.Issues.Add(new Issue(w, false));
+        }
+
         result.Document = doc;
         return result;
     }
@@ -161,5 +179,43 @@ public static class GeometryGenerator
             if (poly.ContainsPoint(center)) maxRaw = raw;
         }
         return zFloorBase + maxRaw;
+    }
+
+    /// <summary>
+    /// Resolve the effective trigger types config for a project: program-wide
+    /// defaults (loaded from <c>assets/triggers.json</c> next to the
+    /// executable, falling back to the built-in three-color preset)
+    /// merged with the project's own <see cref="MapSlopperProject.TriggerOverrides"/>
+    /// (per-Id replacement; missing program-wide entries remain available).
+    /// </summary>
+    public static TriggerTypeConfig ResolveTriggerTypes(MapSlopperProject project)
+    {
+        var baseConfig = LoadProgramWideTriggerConfig();
+        return TriggerTypeConfig.MergeOverrides(baseConfig, project.TriggerOverrides);
+    }
+
+    private static TriggerTypeConfig? s_programWideTriggerConfig;
+    private static TriggerTypeConfig LoadProgramWideTriggerConfig()
+    {
+        if (s_programWideTriggerConfig is not null) return s_programWideTriggerConfig;
+        var candidates = new[]
+        {
+            System.IO.Path.Combine(System.AppContext.BaseDirectory, "assets", "triggers.json"),
+            System.IO.Path.Combine(System.AppContext.BaseDirectory, "triggers.json"),
+        };
+        foreach (var path in candidates)
+        {
+            if (System.IO.File.Exists(path))
+            {
+                try
+                {
+                    s_programWideTriggerConfig = TriggerTypeConfigJson.Load(path);
+                    return s_programWideTriggerConfig;
+                }
+                catch { /* ignore, fall back to built-in */ }
+            }
+        }
+        s_programWideTriggerConfig = TriggerTypeConfig.BuiltInDefault();
+        return s_programWideTriggerConfig;
     }
 }

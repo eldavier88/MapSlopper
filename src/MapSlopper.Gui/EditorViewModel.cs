@@ -10,6 +10,7 @@ using MapSlopper.Core.Generation;
 using MapSlopper.Core.Geometry;
 using MapSlopper.Core.Heightmap;
 using MapSlopper.Core.Project;
+using MapSlopper.Core.Triggers;
 using MapSlopper.Core.Undo;
 using MapSlopper.Gui.Tools;
 
@@ -31,6 +32,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged
     private string _statusMessage = "Ready.";
     private int _brushSizeCells = 1;
     private ushort _paintValue = 64;
+    private byte _activeTriggerTypeId = 1;
     private double _pixelsPerWorldUnit = 1.0;
     private bool _snapToGrid;
 
@@ -48,8 +50,10 @@ public sealed class EditorViewModel : INotifyPropertyChanged
             new ConnectPointsTool(),
             new RemovePointTool(),
             new HeightBrushTool(),
+            new TriggerBrushTool(),
         };
         _activeTool = Tools[0];
+        TriggerTypes = ResolveTriggerTypes();
         WireProject();
         Undo.Changed += OnUndoChanged;
     }
@@ -130,6 +134,27 @@ public sealed class EditorViewModel : INotifyPropertyChanged
         get => _paintValue;
         set { if (_paintValue != value) { _paintValue = value; OnPropertyChanged(); } }
     }
+
+    /// <summary>
+    /// Currently selected trigger type id (1..255). Used by
+    /// <see cref="TriggerBrushTool"/> as the value painted into the
+    /// project's trigger layer. Defaults to the first id in
+    /// <see cref="TriggerTypes"/>.
+    /// </summary>
+    public byte ActiveTriggerTypeId
+    {
+        get => _activeTriggerTypeId;
+        set { if (_activeTriggerTypeId != value) { _activeTriggerTypeId = value; OnPropertyChanged(); RepaintRequested?.Invoke(); } }
+    }
+
+    /// <summary>
+    /// Effective (program-wide + project-override) trigger types. Refreshed
+    /// when the project is replaced; the GUI palette binds to this list.
+    /// </summary>
+    public TriggerTypeConfig TriggerTypes { get; private set; }
+
+    private TriggerTypeConfig ResolveTriggerTypes() =>
+        GeometryGenerator.ResolveTriggerTypes(_project);
 
     public double PixelsPerWorldUnit
     {
@@ -341,14 +366,84 @@ public sealed class EditorViewModel : INotifyPropertyChanged
 
     private void WireProject()
     {
+        SyncTriggerLayerToHeightmap();
         _project.Outline.Changed += OnGraphChanged;
         _project.Heightmap.Changed += OnGraphChanged;
+        _project.Heightmap.Changed += OnHeightmapChangedSyncTriggers;
+        _project.TriggerLayer.Changed += OnGraphChanged;
+        TriggerTypes = ResolveTriggerTypes();
+        OnPropertyChanged(nameof(TriggerTypes));
+        // Keep ActiveTriggerTypeId valid for the freshly-resolved list.
+        if (TriggerTypes.FindById(_activeTriggerTypeId) is null && TriggerTypes.Types.Count > 0)
+        {
+            _activeTriggerTypeId = TriggerTypes.Types[0].Id;
+            OnPropertyChanged(nameof(ActiveTriggerTypeId));
+        }
     }
 
     private void UnwireProject()
     {
         _project.Outline.Changed -= OnGraphChanged;
         _project.Heightmap.Changed -= OnGraphChanged;
+        _project.Heightmap.Changed -= OnHeightmapChangedSyncTriggers;
+        _project.TriggerLayer.Changed -= OnGraphChanged;
+    }
+
+    /// <summary>
+    /// Trigger layer must share dimensions / origin / cell size with the
+    /// heightmap so painting and generation use identical cell coordinates.
+    /// Called on project replace and after the heightmap grows.
+    /// </summary>
+    private void SyncTriggerLayerToHeightmap()
+    {
+        var hm = _project.Heightmap;
+        var tl = _project.TriggerLayer;
+        if (tl.Width == hm.Width && tl.Height == hm.Height
+            && Math.Abs(tl.CellSize - hm.CellSize) < 1e-9
+            && Math.Abs(tl.Origin.X - hm.Origin.X) < 1e-9
+            && Math.Abs(tl.Origin.Y - hm.Origin.Y) < 1e-9)
+        {
+            return;
+        }
+        // Build a fresh layer at the heightmap's geometry, copying any
+        // overlapping painted cells across so existing trigger paint isn't
+        // wiped when the heightmap auto-grows on outline edits.
+        var fresh = new Heightmap16(hm.Width, hm.Height, hm.CellSize, hm.Origin);
+        var dx = (int)Math.Round((tl.Origin.X - hm.Origin.X) / hm.CellSize);
+        var dy = (int)Math.Round((tl.Origin.Y - hm.Origin.Y) / hm.CellSize);
+        for (var y = 0; y < tl.Height; y++)
+        {
+            var ny = y + dy;
+            if (ny < 0 || ny >= fresh.Height) continue;
+            for (var x = 0; x < tl.Width; x++)
+            {
+                var nx = x + dx;
+                if (nx < 0 || nx >= fresh.Width) continue;
+                var v = tl.Data[y * tl.Width + x];
+                if (v != 0) fresh.Data[ny * fresh.Width + nx] = v;
+            }
+        }
+        _project.TriggerLayer = fresh;
+    }
+
+    private void OnHeightmapChangedSyncTriggers()
+    {
+        // Cheap geometry-equality check; SyncTriggerLayerToHeightmap is a
+        // no-op if dimensions already match, so calling it on every
+        // heightmap mutation is fine.
+        var hm = _project.Heightmap;
+        var tl = _project.TriggerLayer;
+        if (tl.Width == hm.Width && tl.Height == hm.Height
+            && Math.Abs(tl.Origin.X - hm.Origin.X) < 1e-9
+            && Math.Abs(tl.Origin.Y - hm.Origin.Y) < 1e-9)
+        {
+            return;
+        }
+        // Subscribe newly-replaced trigger layer (the previous one's event
+        // handler was attached to the old reference).
+        _project.TriggerLayer.Changed -= OnGraphChanged;
+        SyncTriggerLayerToHeightmap();
+        _project.TriggerLayer.Changed += OnGraphChanged;
     }
 
     private void OnGraphChanged()

@@ -73,6 +73,7 @@
             <Button Name="ToolBtn5" Classes="tool" Content="5: Connect" />
             <Button Name="ToolBtn6" Classes="tool" Content="6: Remove Point" />
             <Button Name="ToolBtn7" Classes="tool" Content="7: Height Brush" />
+            <Button Name="ToolBtn8" Classes="tool" Content="8: Trigger Brush" />
         </StackPanel>
 
         <Border DockPanel.Dock="Right" Width="220" Background="#181820" Padding="8">
@@ -98,6 +99,9 @@
                 <TextBlock Text="Floor top Z = paint value. Auto-clamped to (ceilingHeight - 8) at export." Foreground="#666" TextWrapping="Wrap" FontSize="11" />
                 <Separator />
                 <CheckBox Name="SnapCheck" Content="Snap Move to grid (G / Shift)" Foreground="#DDD" />
+                <Separator />
+                <TextBlock Name="TriggerPaletteHeader" Text="Trigger palette" Foreground="#888" />
+                <StackPanel Name="TriggerPalette" Spacing="3" />
                 <Separator />
                 <TextBlock Name="CursorText" Text="Cursor: -" Foreground="#AAA" />
                 <TextBlock Name="ToolHintText" Text="" Foreground="#9CB" TextWrapping="Wrap" FontSize="11" />
