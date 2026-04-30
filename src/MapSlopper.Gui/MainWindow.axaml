@@ -3,7 +3,33 @@
         xmlns:local="clr-namespace:MapSlopper.Gui"
         x:Class="MapSlopper.Gui.MainWindow"
         Width="1200" Height="800"
-        Title="MapSlopper">
+        Title="MapSlopper"
+        Background="#1A1A1F">
+    <Window.Styles>
+        <Style Selector="Button.tool">
+            <Setter Property="Background" Value="#2A2A30" />
+            <Setter Property="Foreground" Value="#E8E8E8" />
+            <Setter Property="BorderBrush" Value="#3A3A42" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Margin" Value="2,1" />
+        </Style>
+        <Style Selector="Button.tool:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#3A3A45" />
+            <Setter Property="TextBlock.Foreground" Value="#FFFFFF" />
+        </Style>
+        <Style Selector="Button.tool.active">
+            <Setter Property="Background" Value="#0078D4" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#1F8FE6" />
+        </Style>
+        <Style Selector="Button.tool.active /template/ ContentPresenter">
+            <Setter Property="Background" Value="#0078D4" />
+            <Setter Property="TextBlock.Foreground" Value="White" />
+        </Style>
+    </Window.Styles>
     <DockPanel LastChildFill="True">
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
@@ -34,25 +60,25 @@
                 <TextBlock Grid.Column="0" Name="StatusText" Text="Ready." Foreground="#DDD" />
                 <TextBlock Grid.Column="1" Name="UndoState" Text="Undo:0 Redo:0" Foreground="#AAA" Margin="12,0" />
                 <TextBlock Grid.Column="2" Name="ClosedState" Text="Closed: no" Foreground="#AAA" Margin="12,0" />
-                <TextBlock Grid.Column="3" Text="MapSlopper Phase 8" Foreground="#666" Margin="12,0,0,0" />
+                <TextBlock Grid.Column="3" Text="MapSlopper" Foreground="#666" Margin="12,0,0,0" />
             </Grid>
         </Border>
 
-        <StackPanel DockPanel.Dock="Left" Width="120" Background="#181818" Spacing="2">
-            <TextBlock Text="Tools" Foreground="#888" Margin="6,6,6,2" />
-            <Button Name="ToolBtn1" Content="1: Add Point" HorizontalAlignment="Stretch" />
-            <Button Name="ToolBtn2" Content="2: Insert Edge" HorizontalAlignment="Stretch" />
-            <Button Name="ToolBtn3" Content="3: Move Point" HorizontalAlignment="Stretch" />
-            <Button Name="ToolBtn4" Content="4: Erase Edge" HorizontalAlignment="Stretch" />
-            <Button Name="ToolBtn5" Content="5: Connect" HorizontalAlignment="Stretch" />
-            <Button Name="ToolBtn6" Content="6: Remove Point" HorizontalAlignment="Stretch" />
-            <Button Name="ToolBtn7" Content="7: Height Brush" HorizontalAlignment="Stretch" />
+        <StackPanel DockPanel.Dock="Left" Width="140" Background="#181820" Spacing="0">
+            <TextBlock Text="Tools" Foreground="#888" Margin="8,8,8,4" FontWeight="Bold" />
+            <Button Name="ToolBtn1" Classes="tool" Content="1: Add Point" />
+            <Button Name="ToolBtn2" Classes="tool" Content="2: Insert Edge" />
+            <Button Name="ToolBtn3" Classes="tool" Content="3: Move Point" />
+            <Button Name="ToolBtn4" Classes="tool" Content="4: Erase Edge" />
+            <Button Name="ToolBtn5" Classes="tool" Content="5: Connect" />
+            <Button Name="ToolBtn6" Classes="tool" Content="6: Remove Point" />
+            <Button Name="ToolBtn7" Classes="tool" Content="7: Height Brush" />
         </StackPanel>
 
-        <Border DockPanel.Dock="Right" Width="220" Background="#181818" Padding="8">
+        <Border DockPanel.Dock="Right" Width="220" Background="#181820" Padding="8">
             <StackPanel Spacing="6">
                 <TextBlock Text="Active Tool" Foreground="#888" />
-                <TextBlock Name="ActiveToolText" Text="Add Point" Foreground="#DDD" />
+                <TextBlock Name="ActiveToolText" Text="Add Point" Foreground="#DDD" FontWeight="Bold" />
                 <Separator />
                 <TextBlock Text="Brush size (cells)" Foreground="#888" />
                 <NumericUpDown Name="BrushSize" Minimum="1" Maximum="64" Value="1" Increment="1" />

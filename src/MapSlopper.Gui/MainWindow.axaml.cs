@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.VisualTree;
 using MapSlopper.Gui.Tools;
 
 namespace MapSlopper.Gui;
@@ -104,9 +105,14 @@ public class MainWindow : Window
         {
             var b = _toolButtons[i];
             if (b is null) continue;
-            b.Background = i == activeIndex
-                ? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromRgb(0x00, 0x78, 0xD4))
-                : null; // null = use theme default
+            if (i == activeIndex)
+            {
+                if (!b.Classes.Contains("active")) b.Classes.Add("active");
+            }
+            else
+            {
+                b.Classes.Remove("active");
+            }
         }
     }
 
@@ -153,6 +159,11 @@ public class MainWindow : Window
         if (ctrl && e.Key == Key.O) { await _vm.OpenAsync(this).ConfigureAwait(true); e.Handled = true; return; }
         if (ctrl && e.Key == Key.N) { OnNew(); e.Handled = true; return; }
         if (ctrl && e.Key == Key.E) { await _vm.ExportMapAsync(this).ConfigureAwait(true); e.Handled = true; return; }
+
+        // Skip single-key tool shortcuts and Frame shortcut when a text input has focus
+        // (otherwise typing in NumericUpDown / TextBox steals our key).
+        if (IsTextInputFocused()) return;
+
         if (!ctrl && !shift)
         {
             switch (e.Key)
@@ -167,6 +178,24 @@ public class MainWindow : Window
                 case Key.F: _canvas.FrameProject(); e.Handled = true; break;
             }
         }
+    }
+
+    private bool IsTextInputFocused()
+    {
+        var f = FocusManager.Instance?.Current;
+        if (f is not IControl c) return false;
+        IControl? cur = c;
+        while (cur is not null)
+        {
+            switch (cur)
+            {
+                case TextBox _:
+                case NumericUpDown _:
+                    return true;
+            }
+            cur = cur.Parent as IControl;
+        }
+        return false;
     }
 
     private void OnNew()

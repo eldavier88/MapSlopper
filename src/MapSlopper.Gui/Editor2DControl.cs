@@ -2,7 +2,6 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
 using MapSlopper.Core.Geometry;
@@ -18,11 +17,14 @@ namespace MapSlopper.Gui;
 /// World convention: +Y points up (Quake). The render method flips Y when
 /// converting world->screen.
 /// </summary>
-public class Editor2DControl : UserControl
+public class Editor2DControl : Control
 {
+    private readonly IBrush _backgroundBrush = new SolidColorBrush(Color.FromRgb(0x18, 0x1A, 0x1F));
+
     public Editor2DControl()
     {
-        AvaloniaXamlLoader.Load(this);
+        Focusable = true;
+        ClipToBounds = true;
     }
 
     private EditorViewModel? _vm;
@@ -228,7 +230,7 @@ public class Editor2DControl : UserControl
         }
 
         var bounds = new Rect(0, 0, Bounds.Width, Bounds.Height);
-        ctx.FillRectangle(new SolidColorBrush(Color.FromRgb(0x20, 0x20, 0x20)), bounds);
+        ctx.FillRectangle(_backgroundBrush, bounds);
 
         DrawHeightmap(ctx);
         DrawGrid(ctx);

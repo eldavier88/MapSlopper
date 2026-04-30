@@ -31,20 +31,18 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      - name: Publish CLI (self-contained, single file)
+      - name: Publish CLI (framework-dependent)
         run: dotnet publish src/MapSlopper.Cli/MapSlopper.Cli.csproj
           --configuration Release
           --runtime ${{ matrix.rid }}
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
+          --self-contained false
           --output publish/${{ matrix.rid }}/cli
 
-      - name: Publish GUI (self-contained)
+      - name: Publish GUI (framework-dependent)
         run: dotnet publish src/MapSlopper.Gui/MapSlopper.Gui.csproj
           --configuration Release
           --runtime ${{ matrix.rid }}
-          --self-contained true
+          --self-contained false
           --output publish/${{ matrix.rid }}/gui
 
       - name: Copy samples and docs
