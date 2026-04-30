@@ -1,0 +1,86 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            archive: zip
+          - os: ubuntu-latest
+            rid: linux-x64
+            archive: tar
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 5.0
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '5.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Publish CLI (self-contained, single file)
+        run: dotnet publish src/MapSlopper.Cli/MapSlopper.Cli.csproj
+          --configuration Release
+          --runtime ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          --output publish/${{ matrix.rid }}/cli
+
+      - name: Publish GUI (self-contained)
+        run: dotnet publish src/MapSlopper.Gui/MapSlopper.Gui.csproj
+          --configuration Release
+          --runtime ${{ matrix.rid }}
+          --self-contained true
+          --output publish/${{ matrix.rid }}/gui
+
+      - name: Copy samples and docs
+        shell: bash
+        run: |
+          mkdir -p publish/${{ matrix.rid }}/samples
+          cp -r samples/* publish/${{ matrix.rid }}/samples/
+          cp README.md publish/${{ matrix.rid }}/README.md
+          cp -r docs publish/${{ matrix.rid }}/docs
+
+      - name: Archive (zip, Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path publish/${{ matrix.rid }}/* -DestinationPath MapSlopper-${{ matrix.rid }}.zip
+
+      - name: Archive (tar.gz, Linux)
+        if: matrix.archive == 'tar'
+        run: |
+          tar -czf MapSlopper-${{ matrix.rid }}.tar.gz -C publish/${{ matrix.rid }} .
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MapSlopper-${{ matrix.rid }}
+          path: |
+            MapSlopper-${{ matrix.rid }}.zip
+            MapSlopper-${{ matrix.rid }}.tar.gz
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Attach to GitHub Release (on tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            MapSlopper-${{ matrix.rid }}.zip
+            MapSlopper-${{ matrix.rid }}.tar.gz
+          fail_on_unmatched_files: false
+          generate_release_notes: true
