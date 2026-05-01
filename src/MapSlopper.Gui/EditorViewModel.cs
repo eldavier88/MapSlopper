@@ -230,28 +230,40 @@ public sealed class EditorViewModel : INotifyPropertyChanged
 
     public async Task OpenAsync(Window owner)
     {
-        var dlg = new OpenFileDialog
-        {
-            Title = "Open project",
-            AllowMultiple = false,
-            Filters = new List<FileDialogFilter>
+        // Avalonia 11 deprecated OpenFileDialog / SaveFileDialog in favour
+        // of the IStorageProvider API on TopLevel/Window. The new picker
+        // returns IStorageFile objects whose Path is a file:// URI;
+        // .LocalPath on that gives us back a real filesystem path.
+        var files = await owner.StorageProvider.OpenFilePickerAsync(
+            new Avalonia.Platform.Storage.FilePickerOpenOptions
             {
-                new FileDialogFilter { Name = "MapSlopper project", Extensions = { "json" } },
-                new FileDialogFilter { Name = "All files", Extensions = { "*" } },
-            },
-        };
-        var result = await dlg.ShowAsync(owner).ConfigureAwait(true);
-        if (result is null || result.Length == 0) return;
+                Title = "Open project",
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType("MapSlopper project")
+                    {
+                        Patterns = new[] { "*.json" },
+                    },
+                    new Avalonia.Platform.Storage.FilePickerFileType("All files")
+                    {
+                        Patterns = new[] { "*" },
+                    },
+                },
+            }).ConfigureAwait(true);
+        if (files is null || files.Count == 0) return;
+        var path = files[0].Path.LocalPath;
+        if (string.IsNullOrEmpty(path)) return;
         try
         {
-            var loaded = ProjectJsonIo.Load(result[0]);
+            var loaded = ProjectJsonIo.Load(path);
             Project = loaded;
             Undo.Clear();
-            CurrentFilePath = result[0];
+            CurrentFilePath = path;
             IsDirty = false;
             SelectedPointId = null;
             _activeTool.Reset();
-            StatusMessage = $"Opened {Path.GetFileName(result[0])}.";
+            StatusMessage = $"Opened {Path.GetFileName(path)}.";
         }
         catch (Exception ex)
         {
@@ -279,21 +291,26 @@ public sealed class EditorViewModel : INotifyPropertyChanged
 
     public async Task<bool> SaveAsAsync(Window owner)
     {
-        var dlg = new SaveFileDialog
-        {
-            Title = "Save project as",
-            DefaultExtension = "mapsproj.json",
-            InitialFileName = Path.GetFileName(CurrentFilePath) ?? "untitled.mapsproj.json",
-            Filters = new List<FileDialogFilter>
+        var file = await owner.StorageProvider.SaveFilePickerAsync(
+            new Avalonia.Platform.Storage.FilePickerSaveOptions
             {
-                new FileDialogFilter { Name = "MapSlopper project", Extensions = { "json" } },
-            },
-        };
-        var path = await dlg.ShowAsync(owner).ConfigureAwait(true);
+                Title = "Save project as",
+                DefaultExtension = "json",
+                SuggestedFileName = Path.GetFileName(CurrentFilePath) ?? "untitled.mapsproj.json",
+                FileTypeChoices = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType("MapSlopper project")
+                    {
+                        Patterns = new[] { "*.json" },
+                    },
+                },
+            }).ConfigureAwait(true);
+        if (file is null) return false;
+        var path = file.Path.LocalPath;
         if (string.IsNullOrEmpty(path)) return false;
         try
         {
-            ProjectJsonIo.Save(_project, path!);
+            ProjectJsonIo.Save(_project, path);
             CurrentFilePath = path;
             IsDirty = false;
             StatusMessage = $"Saved {Path.GetFileName(path)}.";
@@ -308,14 +325,22 @@ public sealed class EditorViewModel : INotifyPropertyChanged
 
     public async Task ExportMapAsync(Window owner)
     {
-        var dlg = new SaveFileDialog
-        {
-            Title = "Export Quake .map",
-            DefaultExtension = "map",
-            InitialFileName = Path.GetFileNameWithoutExtension(CurrentFilePath ?? "untitled") + ".map",
-            Filters = new List<FileDialogFilter> { new FileDialogFilter { Name = "Quake .map", Extensions = { "map" } } },
-        };
-        var path = await dlg.ShowAsync(owner).ConfigureAwait(true);
+        var file = await owner.StorageProvider.SaveFilePickerAsync(
+            new Avalonia.Platform.Storage.FilePickerSaveOptions
+            {
+                Title = "Export Quake .map",
+                DefaultExtension = "map",
+                SuggestedFileName = Path.GetFileNameWithoutExtension(CurrentFilePath ?? "untitled") + ".map",
+                FileTypeChoices = new[]
+                {
+                    new Avalonia.Platform.Storage.FilePickerFileType("Quake .map")
+                    {
+                        Patterns = new[] { "*.map" },
+                    },
+                },
+            }).ConfigureAwait(true);
+        if (file is null) return;
+        var path = file.Path.LocalPath;
         if (string.IsNullOrEmpty(path)) return;
         try
         {
@@ -326,7 +351,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged
                 StatusMessage = "Export failed: " + msg;
                 return;
             }
-            MapWriter.WriteToFile(result.Document, path!);
+            MapWriter.WriteToFile(result.Document, path);
             if (result.Issues.Count > 0)
             {
                 StatusMessage = $"Exported {Path.GetFileName(path)} - WARNING: {result.Issues[0].Message}";

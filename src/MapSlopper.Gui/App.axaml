@@ -1,7 +1,10 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="MapSlopper.Gui.App">
+             x:Class="MapSlopper.Gui.App"
+             RequestedThemeVariant="Dark">
+    <!-- Avalonia 11: FluentTheme.Mode was removed; theme variant is set
+         on the Application root via RequestedThemeVariant. -->
     <Application.Styles>
-        <FluentTheme Mode="Dark" />
+        <FluentTheme />
     </Application.Styles>
 </Application>

@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -12,7 +13,7 @@ using MapSlopper.Gui.Tools;
 
 namespace MapSlopper.Gui;
 
-public class MainWindow : Window
+public partial class MainWindow : Window
 {
     private EditorViewModel _vm = null!;
     private Editor2DControl _canvas = null!;
@@ -106,14 +107,23 @@ public class MainWindow : Window
         };
 
         _snapCheck.IsChecked = _vm.SnapToGrid;
-        _snapCheck.Checked += (_, _) => _vm.SnapToGrid = true;
-        _snapCheck.Unchecked += (_, _) => _vm.SnapToGrid = false;
+        // Avalonia 11: ToggleButton.Checked / Unchecked were unified into
+        // the single IsCheckedChanged event. Read the current state and
+        // mirror it onto the view-model.
+        _snapCheck.IsCheckedChanged += (_, _) => _vm.SnapToGrid = _snapCheck.IsChecked == true;
 
-        _brushSize.ValueChanged += (_, e) => _vm.BrushSizeCells = (int)Math.Max(1, (int)e.NewValue);
+        // NumericUpDown.Value is decimal? in Avalonia 11; coerce safely
+        // (null -> 0/min) and clamp before narrowing to the project's
+        // int / ushort fields.
+        _brushSize.ValueChanged += (_, e) =>
+        {
+            var raw = e.NewValue ?? 1m;
+            _vm.BrushSizeCells = (int)Math.Max(1, (int)raw);
+        };
         _paintValue.ValueChanged += (_, e) =>
         {
-            var v = e.NewValue;
-            if (v < 0) v = 0;
+            var v = e.NewValue ?? 0m;
+            if (v < 0) v = 0m;
             if (v > ushort.MaxValue) v = ushort.MaxValue;
             _vm.PaintValue = (ushort)v;
         };
@@ -358,11 +368,21 @@ public class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Walk up from the currently focused element looking for a TextBox
+    /// or NumericUpDown ancestor. Used by the global key handler to skip
+    /// single-key tool shortcuts when the user is typing in a numeric
+    /// input. Avalonia 11 dropped the static <c>FocusManager.Instance</c>
+    /// in favour of a per-TopLevel <c>FocusManager</c> reachable via
+    /// <see cref="TopLevel.GetTopLevel(Visual)"/>; <c>IControl</c> was
+    /// also removed and replaced by <see cref="Control"/> /
+    /// <see cref="Visual"/>.
+    /// </summary>
     private bool IsTextInputFocused()
     {
-        var f = FocusManager.Instance?.Current;
-        if (f is not IControl c) return false;
-        IControl? cur = c;
+        var top = TopLevel.GetTopLevel(this);
+        var f = top?.FocusManager?.GetFocusedElement();
+        Visual? cur = f as Visual;
         while (cur is not null)
         {
             switch (cur)
@@ -371,19 +391,20 @@ public class MainWindow : Window
                 case NumericUpDown _:
                     return true;
             }
-            cur = cur.Parent as IControl;
+            cur = cur.GetVisualParent();
         }
         return false;
     }
 
     private bool IsPreview3DFocused()
     {
-        var f = FocusManager.Instance?.Current;
-        IControl? cur = f as IControl;
+        var top = TopLevel.GetTopLevel(this);
+        var f = top?.FocusManager?.GetFocusedElement();
+        Visual? cur = f as Visual;
         while (cur is not null)
         {
             if (cur is Preview3DControl) return true;
-            cur = cur.Parent as IControl;
+            cur = cur.GetVisualParent();
         }
         return false;
     }
@@ -430,7 +451,7 @@ public class MainWindow : Window
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Content = new TextBlock
             {
-                Text = "MapSlopper — 2D map editor for Quake 3.\nPhase 8 GUI build (Avalonia 0.10 / .NET 5).",
+                Text = "MapSlopper — 2D map editor for Quake 3.\nAvalonia 11 / .NET 10 build.",
                 Margin = new Avalonia.Thickness(20),
                 TextWrapping = Avalonia.Media.TextWrapping.Wrap,
             },
@@ -440,11 +461,18 @@ public class MainWindow : Window
 
     private async Task OnAddAssetRootAsync()
     {
-        var dlg = new OpenFolderDialog
+        // Avalonia 11 deprecated OpenFolderDialog in favour of the
+        // IStorageProvider API on TopLevel/Window. The new picker returns
+        // IStorageFolder objects; we convert to a local filesystem path
+        // via Path.LocalPath for compatibility with our existing
+        // AssetRootHelper.ResolvePickedDirectory.
+        var folders = await StorageProvider.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions
         {
             Title = "Pick a baseq3, GameData/base, or other Q3-style content folder",
-        };
-        var picked = await dlg.ShowAsync(this).ConfigureAwait(true);
+            AllowMultiple = false,
+        }).ConfigureAwait(true);
+        if (folders is null || folders.Count == 0) return;
+        var picked = folders[0].Path.LocalPath;
         if (string.IsNullOrEmpty(picked)) return;
 
         // Auto-correct common picks: parent of baseq3, parent of GameData,
@@ -464,18 +492,21 @@ public class MainWindow : Window
 
     private async Task OnAddAssetPk3Async()
     {
-        var dlg = new OpenFileDialog
+        var files = await StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
         {
             Title = "Choose a .pk3 asset archive",
             AllowMultiple = false,
-            Filters = new System.Collections.Generic.List<FileDialogFilter>
+            FileTypeFilter = new[]
             {
-                new() { Name = "Quake 3 PK3", Extensions = new System.Collections.Generic.List<string> { "pk3" } },
+                new Avalonia.Platform.Storage.FilePickerFileType("Quake 3 PK3")
+                {
+                    Patterns = new[] { "*.pk3" },
+                },
             },
-        };
-        var picked = await dlg.ShowAsync(this).ConfigureAwait(true);
-        if (picked is null || picked.Length == 0) return;
-        var path = picked[0];
+        }).ConfigureAwait(true);
+        if (files is null || files.Count == 0) return;
+        var path = files[0].Path.LocalPath;
+        if (string.IsNullOrEmpty(path)) return;
         if (_vm.Project.AssetRoots.Contains(path)) { _vm.StatusMessage = "PK3 already added."; return; }
         _vm.Project.AssetRoots.Add(path);
         _preview.ReloadAssets();

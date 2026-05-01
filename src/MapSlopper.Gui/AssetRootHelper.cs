@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 
 namespace MapSlopper.Gui;
 
@@ -118,10 +117,16 @@ internal static class AssetRootHelper
     /// exe (copied by the csproj Content item). Returns null when the
     /// directory is missing — e.g. running from a stripped publish that
     /// lost the assets, or unit tests that don't include them.
+    ///
+    /// Uses <see cref="AppContext.BaseDirectory"/> rather than
+    /// <c>Assembly.GetExecutingAssembly().Location</c> because the
+    /// latter returns an empty string when running from a single-file
+    /// publish (the assemblies are extracted to a temp folder, but the
+    /// exe lives elsewhere, and Location reflects neither correctly).
     /// </summary>
     public static string? GetBundledBaseq3Path()
     {
-        var exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        var exeDir = AppContext.BaseDirectory;
         if (string.IsNullOrEmpty(exeDir)) return null;
         var bundled = Path.Combine(exeDir, "assets", "baseq3");
         return Directory.Exists(bundled) ? bundled : null;

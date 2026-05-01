@@ -530,12 +530,12 @@ public sealed class Preview3DControl : Control
         }
 
         // HUD.
-        var hud = new FormattedText(
+        var hud = FormattedTextCompat.Make(
             $"pos {_camPos.X:0}, {_camPos.Y:0}, {_camPos.Z:0}   yaw {(_yaw * 180 / Math.PI):0}°   "
             + $"pitch {(_pitch * 180 / Math.PI):0}°   speed {_moveSpeed:0}/s   tris {trianglesDrawn}   "
             + $"fb {_bbW}x{_bbH}   {_assetStatus}",
-            Typeface.Default, 12, TextAlignment.Left, TextWrapping.NoWrap, bounds.Size);
-        context.DrawText(Brushes.LightGray, new Point(8, bounds.Height - 20), hud);
+            Typeface.Default, 12, Brushes.LightGray);
+        context.DrawText(hud, new Point(8, bounds.Height - 20));
     }
 
     private void EnsureBackbuffer(int w, int h)
@@ -635,39 +635,41 @@ public sealed class Preview3DControl : Control
         var cardY = Math.Min(80, bounds.Height * 0.1);
 
         // Headline.
-        var headlineFt = new FormattedText(
-            headline, new Typeface("Segoe UI", FontStyle.Normal, FontWeight.SemiBold),
-            22, TextAlignment.Left, TextWrapping.Wrap, new Size(cardW, 200));
-        context.DrawText(headlineColor, new Point(cardX, cardY), headlineFt);
+        var headlineFt = FormattedTextCompat.Make(
+            headline,
+            new Typeface("Segoe UI", FontStyle.Normal, FontWeight.SemiBold),
+            22, headlineColor, TextAlignment.Left, cardW);
+        context.DrawText(headlineFt, new Point(cardX, cardY));
 
         // Body paragraph.
-        var bodyFt = new FormattedText(
+        var bodyFt = FormattedTextCompat.Make(
             body, new Typeface("Segoe UI"),
-            13, TextAlignment.Left, TextWrapping.Wrap, new Size(cardW, 200));
-        context.DrawText(bodyColor, new Point(cardX, cardY + 38), bodyFt);
+            13, bodyColor, TextAlignment.Left, cardW);
+        context.DrawText(bodyFt, new Point(cardX, cardY + 38));
 
         // Steps list.
-        var stepY = cardY + 38 + bodyFt.Bounds.Height + 18;
+        var stepY = cardY + 38 + bodyFt.Height + 18;
         foreach (var (bullet, text, color) in steps)
         {
-            var bulletFt = new FormattedText(
-                bullet, new Typeface("Segoe UI", FontStyle.Normal, FontWeight.Bold),
-                13, TextAlignment.Center, TextWrapping.NoWrap, new Size(20, 20));
-            context.DrawText(color, new Point(cardX, stepY), bulletFt);
+            var bulletFt = FormattedTextCompat.Make(
+                bullet,
+                new Typeface("Segoe UI", FontStyle.Normal, FontWeight.Bold),
+                13, color, TextAlignment.Center);
+            context.DrawText(bulletFt, new Point(cardX, stepY));
 
-            var textFt = new FormattedText(
+            var textFt = FormattedTextCompat.Make(
                 text, new Typeface("Segoe UI"),
-                13, TextAlignment.Left, TextWrapping.Wrap, new Size(cardW - 28, 200));
-            context.DrawText(color, new Point(cardX + 24, stepY), textFt);
-            stepY += Math.Max(20, textFt.Bounds.Height + 6);
+                13, color, TextAlignment.Left, cardW - 28);
+            context.DrawText(textFt, new Point(cardX + 24, stepY));
+            stepY += Math.Max(20, textFt.Height + 6);
         }
 
         // Footer: camera controls primer (always shown, low contrast).
         var primer = "Camera: right-drag look • WASD move • QE up/down • F frame • scroll = speed";
-        var primerFt = new FormattedText(
+        var primerFt = FormattedTextCompat.Make(
             primer, new Typeface("Segoe UI"),
-            11, TextAlignment.Left, TextWrapping.NoWrap, new Size(bounds.Width - 24, 20));
-        context.DrawText(muteColor, new Point(12, bounds.Height - 22), primerFt);
+            11, muteColor);
+        context.DrawText(primerFt, new Point(12, bounds.Height - 22));
     }
 
     private void BlitToBitmap()

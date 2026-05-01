@@ -120,12 +120,11 @@ public sealed class HeightHistogramControl : Control
             var px = (_vm.PaintValue / 65535.0) * w;
             var pen = new Pen(Brushes.OrangeRed, 1.5);
             ctx.DrawLine(pen, new Point(px, 0), new Point(px, h));
-            var ft = new FormattedText(
+            var ft = FormattedTextCompat.Make(
                 _vm.PaintValue.ToString(),
-                Typeface.Default, 11, TextAlignment.Left,
-                TextWrapping.NoWrap, new Size(60, 14));
+                Typeface.Default, 11, Brushes.OrangeRed);
             var tx = Math.Min(w - 32, px + 3);
-            ctx.DrawText(Brushes.OrangeRed, new Point(tx, 1), ft);
+            ctx.DrawText(ft, new Point(tx, 1));
         }
     }
 

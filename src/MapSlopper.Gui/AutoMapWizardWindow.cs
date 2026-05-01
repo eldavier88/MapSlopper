@@ -382,8 +382,12 @@ internal sealed class AutoMapWizardWindow : Window
             Padding = new Thickness(6, 4),
             Margin = new Thickness(0, 2, 0, 2),
         };
-        rb.Checked += (_, _) =>
+        // Avalonia 11 obsoletes Checked / Unchecked on ToggleButton in
+        // favour of the unified IsCheckedChanged event. We only react to
+        // the "becomes checked" transition, so we filter on IsChecked.
+        rb.IsCheckedChanged += (_, _) =>
         {
+            if (rb.IsChecked != true) return;
             _selectedPreset = p;
             _isCustom = false;
             UpdateBlurb();
@@ -411,8 +415,9 @@ internal sealed class AutoMapWizardWindow : Window
             Padding = new Thickness(6, 4),
             Margin = new Thickness(0, 2, 0, 2),
         };
-        rb.Checked += (_, _) =>
+        rb.IsCheckedChanged += (_, _) =>
         {
+            if (rb.IsChecked != true) return;
             if (isSurprise)
             {
                 _selectedPreset = Presets[_rng.Next(Presets.Length)];
@@ -467,6 +472,9 @@ internal sealed class AutoMapWizardWindow : Window
         _suppressAdvancedEcho = true;
         try
         {
+            // Avalonia 11 changed NumericUpDown.Value from double to
+            // decimal? — wrap each int we write in (decimal) so the
+            // implicit conversion is unambiguous.
             var (baseW, baseH) = SizeBase[_sizeBucket];
             var w = SnapTo8(baseW * _selectedPreset.SizeMultiplier);
             var h = SnapTo8(baseH * _selectedPreset.SizeMultiplier);
@@ -566,12 +574,15 @@ internal sealed class AutoMapWizardWindow : Window
     {
         if (_isCustom || _selectedPreset is null)
         {
+            // Avalonia 11 NumericUpDown.Value is decimal?; coerce to int
+            // by treating null as 0 and passing through Math.Round to
+            // handle fractional spinner steps the user may have typed.
             return new EditorViewModel.AutoMapOptions
             {
-                WidthCells  = (int)Math.Round(_widthUpDown.Value),
-                HeightCells = (int)Math.Round(_heightUpDown.Value),
-                Complexity  = (int)Math.Round(_complexityUpDown.Value),
-                Relief      = (ushort)Math.Clamp((int)Math.Round(_reliefUpDown.Value), 32, ushort.MaxValue),
+                WidthCells  = (int)Math.Round(_widthUpDown.Value      ?? 0m),
+                HeightCells = (int)Math.Round(_heightUpDown.Value     ?? 0m),
+                Complexity  = (int)Math.Round(_complexityUpDown.Value ?? 0m),
+                Relief      = (ushort)Math.Clamp((int)Math.Round(_reliefUpDown.Value ?? 32m), 32, ushort.MaxValue),
                 Seed        = _userSeed,
             };
         }
@@ -753,12 +764,11 @@ internal sealed class MapThumbnailControl : Control
 
     private static void DrawHint(DrawingContext context, Rect bounds, string text)
     {
-        var ft = new FormattedText(text, new Typeface("Segoe UI"),
-            12, TextAlignment.Center, TextWrapping.NoWrap, bounds.Size);
         var textColor = new SolidColorBrush(Color.FromRgb(0x6F, 0x6F, 0x7A));
-        context.DrawText(textColor,
-            new Point(bounds.Width / 2 - ft.Bounds.Width / 2,
-                     bounds.Height / 2 - ft.Bounds.Height / 2),
-            ft);
+        var ft = FormattedTextCompat.Make(text, new Typeface("Segoe UI"),
+            12, textColor, TextAlignment.Center);
+        context.DrawText(ft,
+            new Point(bounds.Width / 2 - ft.Width / 2,
+                     bounds.Height / 2 - ft.Height / 2));
     }
 }

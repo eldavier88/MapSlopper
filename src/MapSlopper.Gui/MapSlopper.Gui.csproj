@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Preview3DControl writes to the Avalonia WriteableBitmap
@@ -9,15 +9,19 @@
          overhead of Marshal.Copy on a uint[] (which would require a
          second managed buffer). -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Suppress Avalonia 11's CompiledBindings-required warnings; we
+         use legacy reflection-based bindings for now and will migrate
+         in a later phase. -->
+    <NoWarn>$(NoWarn);AVLN3132</NoWarn>
   </PropertyGroup>
 
   <!-- `dotnet publish` always produces a framework-dependent single-file
        executable: one self-contained MapSlopper.Gui[.exe] with all our
        managed DLLs, the .pdb, and the native SkiaSharp / HarfBuzzSharp
        libraries embedded inside (extracted to a per-user temp folder at
-       launch). End-users still need the .NET 5 runtime installed
-       (SelfContained=false), which keeps the file small (~8 MB vs
-       ~80 MB self-contained). These props only affect publish; normal
+       launch). End-users still need the .NET 10 runtime installed
+       (SelfContained=false), which keeps the file small (~25 MB vs
+       ~90 MB self-contained). These props only affect publish; normal
        `dotnet build` keeps producing loose DLLs in bin/Debug for fast
        iteration with the debugger. PublishTrimmed is intentionally
        omitted: Avalonia uses reflection for XAML and trimming silently
@@ -31,18 +35,29 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Avalonia 0.10.x is the last line that supports net5.0. -->
-    <PackageReference Include="Avalonia" Version="0.10.21" />
-    <PackageReference Include="Avalonia.Desktop" Version="0.10.21" />
-    <PackageReference Include="Avalonia.Diagnostics" Version="0.10.21">
+    <!-- Avalonia 11.3.x is the current stable line, supports .NET 6+
+         (we target net10.0). Themes.Fluent provides the modern
+         Microsoft Fluent design tokens that the App.axaml ResourceInclude
+         pulls in. -->
+    <PackageReference Include="Avalonia" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.13">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
-    <!-- Brought in transitively by Avalonia.Skia 0.10.21; referenced
+    <!-- Brought in transitively by Avalonia.Skia 11.3.x; referenced
          explicitly so the 3D preview can decode PNG/JPG textures from
          user-supplied asset roots into raw RGBA without depending on
          Avalonia's internal bitmap converters. -->
-    <PackageReference Include="SkiaSharp" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp" Version="3.119.0" />
+    <!-- Override Avalonia 11.3.13's transitive Tmds.DBus.Protocol 0.21.2
+         (CVE-2026-39959 / GHSA-xrw6-gwf8-vvr9 — D-Bus peer spoofing /
+         FD exhaustion). Pinning to the 0.21.x patched line to avoid
+         API churn from the 0.92.x rebase. Only used on Linux; Windows
+         and macOS builds don't load DBus at runtime. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 
   <ItemGroup>

@@ -9,7 +9,7 @@ namespace MapSlopper.Gui;
 /// brightness range). Changes are applied live by writing back into the
 /// shared <see cref="Core.Heightmap.HeightmapLevels"/> instance.
 /// </summary>
-public class LevelsWindow : Window
+public partial class LevelsWindow : Window
 {
     private readonly EditorViewModel? _vm;
     private NumericUpDown? _minUpDown;
@@ -64,8 +64,8 @@ public class LevelsWindow : Window
         if (max == 0) max = ushort.MaxValue;
         _vm.Levels.DisplayMin = 0;
         _vm.Levels.DisplayMax = max;
-        if (_minUpDown is not null) _minUpDown.Value = 0;
-        if (_maxUpDown is not null) _maxUpDown.Value = max;
+        if (_minUpDown is not null) _minUpDown.Value = 0m;
+        if (_maxUpDown is not null) _maxUpDown.Value = (decimal)max;
         // Trigger repaint.
         var hm = _vm.Project.Heightmap;
         if (hm.Width > 0 && hm.Height > 0) hm.Set(0, 0, hm.Sample(0, 0));
@@ -73,10 +73,18 @@ public class LevelsWindow : Window
 
     private void OnCloseClicked(object? sender, RoutedEventArgs e) => Close();
 
-    private static ushort ClampToUshort(double v)
+    /// <summary>
+    /// Avalonia 11 changed <see cref="NumericUpDown.Value"/> from
+    /// <see cref="double"/> to <c>decimal?</c>; the new event argument
+    /// type carries a nullable decimal as well, so we coerce safely
+    /// (null -> 0, NaN/-Inf clamped) before narrowing to ushort.
+    /// </summary>
+    private static ushort ClampToUshort(decimal? v)
     {
-        if (double.IsNaN(v) || v < 0) return 0;
-        if (v > ushort.MaxValue) return ushort.MaxValue;
-        return (ushort)v;
+        if (v is null) return 0;
+        var d = v.Value;
+        if (d < 0) return 0;
+        if (d > ushort.MaxValue) return ushort.MaxValue;
+        return (ushort)d;
     }
 }

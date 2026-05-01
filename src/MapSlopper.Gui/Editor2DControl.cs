@@ -26,16 +26,19 @@ public class Editor2DControl : Control
         Focusable = true;
         ClipToBounds = true;
         
-        // Force a repaint and auto-frame whenever the control's size changes, 
-        // unless the user has taken manual control of the camera.
-        this.GetObservable(BoundsProperty).Subscribe(bounds => 
+        // Force a repaint and auto-frame whenever the control's size changes,
+        // unless the user has taken manual control of the camera. Avalonia
+        // 11 dropped the System.Reactive bridge so GetObservable + lambda
+        // Subscribe no longer compiles; SizeChanged covers the same intent
+        // with a plain .NET event and fires whenever Bounds change.
+        SizeChanged += (_, e) =>
         {
-            if (!_userHasModifiedCamera && bounds.Width > 50 && bounds.Height > 50)
+            if (!_userHasModifiedCamera && e.NewSize.Width > 50 && e.NewSize.Height > 50)
             {
                 FrameProject();
             }
             InvalidateVisual();
-        });
+        };
     }
 
     private EditorViewModel? _vm;
@@ -358,15 +361,15 @@ public class Editor2DControl : Control
         {
             var x = mn.X + i * step;
             var s = WorldToScreen(new Vec2(x, mn.Y));
-            var ft = MakeLabel(((int)Math.Round(x)).ToString(System.Globalization.CultureInfo.InvariantCulture));
-            ctx.DrawText(labelBrush, new Point(s.X + 2, s.Y - 14), ft);
+            var ft = MakeLabel(((int)Math.Round(x)).ToString(System.Globalization.CultureInfo.InvariantCulture), labelBrush);
+            ctx.DrawText(ft, new Point(s.X + 2, s.Y - 14));
         }
         for (var j = 0; j <= ny; j += 8)
         {
             var y = mn.Y + j * step;
             var s = WorldToScreen(new Vec2(mn.X, y));
-            var ft = MakeLabel(((int)Math.Round(y)).ToString(System.Globalization.CultureInfo.InvariantCulture));
-            ctx.DrawText(labelBrush, new Point(s.X + 2, s.Y), ft);
+            var ft = MakeLabel(((int)Math.Round(y)).ToString(System.Globalization.CultureInfo.InvariantCulture), labelBrush);
+            ctx.DrawText(ft, new Point(s.X + 2, s.Y));
         }
     }
 
@@ -463,17 +466,16 @@ public class Editor2DControl : Control
         var fill = new SolidColorBrush(Color.FromArgb(80, 80, 160, 255));
         var pen = new Pen(new SolidColorBrush(Color.FromArgb(200, 80, 160, 255)), 1);
         ctx.DrawRectangle(fill, pen, new Rect(a, b));
-        var label = MakeLabel("32×32×64 player");
+        var label = MakeLabel("32×32×64 player", Brushes.LightSkyBlue);
         var origin = WorldToScreen(new Vec2(-16, -16));
-        ctx.DrawText(Brushes.LightSkyBlue, new Point(origin.X, origin.Y + 2), label);
+        ctx.DrawText(label, new Point(origin.X, origin.Y + 2));
     }
 
-    private static FormattedText MakeLabel(string text) =>
-        new FormattedText(
-            text,
-            Typeface.Default,
-            11,
-            TextAlignment.Left,
-            TextWrapping.NoWrap,
-            new Size(double.PositiveInfinity, double.PositiveInfinity));
+    /// <summary>
+    /// Build a small grid/label <see cref="FormattedText"/>. Avalonia 11
+    /// requires the foreground brush at construction time, so we take it
+    /// as a parameter rather than passing it separately to <c>DrawText</c>.
+    /// </summary>
+    private static FormattedText MakeLabel(string text, IBrush brush) =>
+        FormattedTextCompat.Make(text, Typeface.Default, 11, brush);
 }
