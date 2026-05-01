@@ -225,11 +225,13 @@ public class Editor2DControl : Control
 
         // If Bounds were zero when FrameProject() was first scheduled, auto-frame
         // once valid bounds arrive (catches late-layout scenarios inside TabControl).
+        // Fall through so this Render draws with the newly-set camera -- calling
+        // InvalidateVisual() from inside Render is unreliable in Avalonia and
+        // would otherwise leave the canvas blank until the first pointer event.
         if (!_hasAutoFramed && Bounds.Width > 1 && Bounds.Height > 1)
         {
             _hasAutoFramed = true;
             FrameProject();
-            return; // FrameProject() calls InvalidateVisual(); let the next Render draw.
         }
 
         var bounds = new Rect(0, 0, Bounds.Width, Bounds.Height);

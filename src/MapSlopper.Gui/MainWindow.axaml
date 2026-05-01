@@ -64,7 +64,7 @@
             </Grid>
         </Border>
 
-        <Grid>
+        <Grid Name="MainGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="140" MinWidth="40" />
                 <ColumnDefinition Width="4" />

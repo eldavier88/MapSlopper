@@ -35,6 +35,7 @@ public class MainWindow : Window
     private TextBlock _triggerPaletteHeader = null!;
     private StackPanel _triggerPalette = null!;
     private bool _suppressClosePrompt;
+    private UiSettings _uiSettings = new();
 
     public MainWindow()
     {
@@ -43,7 +44,29 @@ public class MainWindow : Window
         WireControls();
         WireMenus();
         WireKeyboard();
+        LoadAndApplyUiSettings();
         Closing += OnClosingAsync;
+    }
+
+    private (ColumnDefinition Left, ColumnDefinition Right)? GetSidePanelColumns()
+    {
+        var grid = this.FindControl<Grid>("MainGrid");
+        if (grid is null || grid.ColumnDefinitions.Count < 5) return null;
+        return (grid.ColumnDefinitions[0], grid.ColumnDefinitions[4]);
+    }
+
+    private void LoadAndApplyUiSettings()
+    {
+        _uiSettings = UiSettings.Load();
+        if (GetSidePanelColumns() is not { } cols) return;
+        _uiSettings.ApplyTo(this, cols.Left, cols.Right);
+    }
+
+    private void CaptureAndSaveUiSettings()
+    {
+        if (GetSidePanelColumns() is not { } cols) return;
+        _uiSettings.CaptureFrom(this, cols.Left, cols.Right);
+        _uiSettings.Save();
     }
 
     private void BuildViewModel()
@@ -404,8 +427,8 @@ public class MainWindow : Window
 
     private async void OnClosingAsync(object? sender, CancelEventArgs e)
     {
-        if (_suppressClosePrompt) return;
-        if (!_vm.IsDirty) return;
+        if (_suppressClosePrompt) { CaptureAndSaveUiSettings(); return; }
+        if (!_vm.IsDirty) { CaptureAndSaveUiSettings(); return; }
         e.Cancel = true;
         var choice = await PromptUnsavedChangesAsync().ConfigureAwait(true);
         if (choice == UnsavedChoice.Cancel) return;
@@ -415,6 +438,7 @@ public class MainWindow : Window
             if (!saved) return;
         }
         _suppressClosePrompt = true;
+        CaptureAndSaveUiSettings();
         Close();
     }
 
