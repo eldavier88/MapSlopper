@@ -31,3 +31,4 @@ Thumbs.db
 
 # Generated maps in scratch dirs
 scratch/
+test_leak.json
