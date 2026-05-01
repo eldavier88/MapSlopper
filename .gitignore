@@ -31,3 +31,7 @@ Thumbs.db
 
 # Generated maps in scratch dirs
 scratch/
+
+# Local-only convenience scripts (kept on disk for local use,
+# never pushed)
+scripts/publish.ps1

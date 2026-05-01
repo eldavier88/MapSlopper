@@ -10,4 +10,17 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- `dotnet publish` always produces a framework-dependent single-file
+       executable: one self-contained MapSlopper.Cli[.exe] with all our
+       managed DLLs and the .pdb embedded inside. End-users still need
+       the .NET 5 runtime installed (SelfContained=false), which keeps
+       the file small (~4 MB vs ~60 MB self-contained). These props only
+       affect publish; `dotnet build` keeps producing loose DLLs in
+       bin/Debug for fast iteration. -->
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
 </Project>

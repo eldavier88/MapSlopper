@@ -11,6 +11,25 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- `dotnet publish` always produces a framework-dependent single-file
+       executable: one self-contained MapSlopper.Gui[.exe] with all our
+       managed DLLs, the .pdb, and the native SkiaSharp / HarfBuzzSharp
+       libraries embedded inside (extracted to a per-user temp folder at
+       launch). End-users still need the .NET 5 runtime installed
+       (SelfContained=false), which keeps the file small (~8 MB vs
+       ~80 MB self-contained). These props only affect publish; normal
+       `dotnet build` keeps producing loose DLLs in bin/Debug for fast
+       iteration with the debugger. PublishTrimmed is intentionally
+       omitted: Avalonia uses reflection for XAML and trimming silently
+       deletes types it can't statically prove are reachable, which
+       crashes the app at runtime. -->
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- Avalonia 0.10.x is the last line that supports net5.0. -->
     <PackageReference Include="Avalonia" Version="0.10.21" />
