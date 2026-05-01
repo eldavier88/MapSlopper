@@ -145,9 +145,17 @@ public sealed class AssetLibrary
         }
         // 2) Fall back to direct path probes.
         var basePath = "textures/" + normalized;
-        foreach (var ext in new[] { ".tga", ".jpg", ".jpeg", ".png" })
+        var orderings = new[] { ".tga", ".jpg", ".jpeg", ".png" };
+        foreach (var ext in orderings)
         {
             var resolved = TryLoadFile(basePath + ext);
+            if (resolved is not null) return resolved with { IsEmissive = emissive };
+        }
+        
+        // 3) Fall back to allowing the asset root itself to BE the textures folder (try without 'textures/' prefix)
+        foreach (var ext in orderings)
+        {
+            var resolved = TryLoadFile(normalized + ext);
             if (resolved is not null) return resolved with { IsEmissive = emissive };
         }
         return null;

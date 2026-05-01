@@ -267,6 +267,7 @@ public class MainWindow : Window
     private void WireMenus()
     {
         Hook("MenuNew", _ => OnNew());
+        Hook("MenuAutoMap", async _ => await OnAutoMapAsync().ConfigureAwait(true));
         Hook("MenuOpen", async _ => await _vm.OpenAsync(this).ConfigureAwait(true));
         Hook("MenuSave", async _ => await _vm.SaveAsync(this).ConfigureAwait(true));
         Hook("MenuSaveAs", async _ => await _vm.SaveAsAsync(this).ConfigureAwait(true));
@@ -378,6 +379,119 @@ public class MainWindow : Window
         // already gets a Save? prompt on Quit which is the requirement spec).
         _vm.NewProject();
         _canvas.FrameProject();
+    }
+
+    private async Task OnAutoMapAsync()
+    {
+        var opts = await PromptAutoMapOptionsAsync().ConfigureAwait(true);
+        if (opts is null) return;
+        try
+        {
+            _vm.GenerateAutoMap(opts);
+            _canvas.FrameProject();
+            _preview.ReloadAssets();
+            _preview.FrameNow();
+        }
+        catch (Exception ex)
+        {
+            _vm.StatusMessage = "Automatic generation failed: " + ex.Message;
+        }
+    }
+
+    private Task<EditorViewModel.AutoMapOptions?> PromptAutoMapOptionsAsync()
+    {
+        var tcs = new TaskCompletionSource<EditorViewModel.AutoMapOptions?>();
+        var dlg = new Window
+        {
+            Title = "Generate Automatic Map",
+            Width = 360,
+            Height = 300,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+        };
+
+        var widthUpDown = new NumericUpDown { Minimum = 24, Maximum = 512, Increment = 8, Value = 96 };
+        var heightUpDown = new NumericUpDown { Minimum = 24, Maximum = 512, Increment = 8, Value = 96 };
+        var complexityUpDown = new NumericUpDown { Minimum = 1, Maximum = 5, Increment = 1, Value = 3 };
+        var reliefUpDown = new NumericUpDown { Minimum = 32, Maximum = 4096, Increment = 16, Value = 192 };
+        var seedBox = new TextBox { Watermark = "empty = random" };
+
+        static StackPanel Row(string label, Control editor)
+        {
+            return new StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = label,
+                        Width = 130,
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    },
+                    editor,
+                },
+            };
+        }
+
+        var panel = new StackPanel { Margin = new Avalonia.Thickness(16), Spacing = 10 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Creates a complete, exportable map from a seed (outline + floor heights + triggers).",
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+        });
+        panel.Children.Add(Row("Width (cells)", widthUpDown));
+        panel.Children.Add(Row("Height (cells)", heightUpDown));
+        panel.Children.Add(Row("Complexity (1-5)", complexityUpDown));
+        panel.Children.Add(Row("Relief (height)", reliefUpDown));
+        panel.Children.Add(Row("Seed", seedBox));
+
+        var buttons = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+        };
+        var genBtn = new Button { Content = "Generate" };
+        var cancelBtn = new Button { Content = "Cancel" };
+        buttons.Children.Add(genBtn);
+        buttons.Children.Add(cancelBtn);
+        panel.Children.Add(buttons);
+
+        genBtn.Click += (_, _) =>
+        {
+            int? seed = null;
+            if (!string.IsNullOrWhiteSpace(seedBox.Text))
+            {
+                if (!int.TryParse(seedBox.Text, out var parsed))
+                {
+                    _vm.StatusMessage = "Seed must be a valid integer.";
+                    return;
+                }
+                seed = parsed;
+            }
+
+            var opts = new EditorViewModel.AutoMapOptions
+            {
+                WidthCells = (int)Math.Round(widthUpDown.Value),
+                HeightCells = (int)Math.Round(heightUpDown.Value),
+                Complexity = (int)Math.Round(complexityUpDown.Value),
+                Relief = (ushort)Math.Clamp((int)Math.Round(reliefUpDown.Value), 32, ushort.MaxValue),
+                Seed = seed,
+            };
+            tcs.TrySetResult(opts);
+            dlg.Close();
+        };
+        cancelBtn.Click += (_, _) =>
+        {
+            tcs.TrySetResult(null);
+            dlg.Close();
+        };
+        dlg.Closed += (_, _) => tcs.TrySetResult(null);
+        dlg.Content = panel;
+        _ = dlg.ShowDialog(this);
+        return tcs.Task;
     }
 
     private void OpenLevelsWindow()

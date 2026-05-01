@@ -111,17 +111,22 @@ public static class FloorCeilingGenerator
                 minQuant, maxRawAllowed,
                 ref clampedCells, ref clampedMaxRaw);
 
-            // Per-piece BASE slab from floorBase up to the piece's lowest
-            // quantized cell top. This hermetically seals sliver fragments
-            // at sharp polygon corners (where cell-clipped pieces can be
-            // arbitrarily small). It IS the floor for any cell whose
-            // height equals baseRaw -- those cells emit no stacked brush.
+            // Per-piece BASE slab: top at the piece's lowest quantized cell
+            // top (baseTop), bottom at max(zFloorBase, baseTop - overlap).
+            // Matching the wall formula ensures that when all cells are
+            // painted high (e.g. raw=2000) the base slab is only
+            // StackOverlapRaw thick rather than a 2000-unit monolith.
+            // The walls use zFloorBase + minEdgeRaw - overlap as their
+            // bottom; the base slab bottom == baseTop - overlap aligns
+            // exactly with the wall bottom at the same height, keeping the
+            // sealed-box guarantee with no gap.
             var pieceCcw = piece;
             var baseTop = zFloorBase + baseRaw;
+            var baseBottom = Math.Max(zFloorBase, baseTop - StackOverlapRaw);
             if (baseTop > zFloorBase)
             {
                 result.FloorBrushes.Add(BrushFactory.MakeVerticalPrism(
-                    pieceCcw, zFloorBase, baseTop,
+                    pieceCcw, baseBottom, baseTop,
                     sideTexture: wallTexture,
                     topTexture: floorTexture,
                     bottomTexture: floorTexture));

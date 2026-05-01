@@ -34,6 +34,7 @@
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
                 <MenuItem Name="MenuNew" Header="_New" InputGesture="Ctrl+N" />
+                <MenuItem Name="MenuAutoMap" Header="_Generate Automatic Map..." />
                 <MenuItem Name="MenuOpen" Header="_Open..." InputGesture="Ctrl+O" />
                 <MenuItem Name="MenuSave" Header="_Save" InputGesture="Ctrl+S" />
                 <MenuItem Name="MenuSaveAs" Header="Save _As..." InputGesture="Ctrl+Shift+S" />
@@ -68,20 +69,34 @@
             </Grid>
         </Border>
 
-        <StackPanel DockPanel.Dock="Left" Width="140" Background="#181820" Spacing="0">
-            <TextBlock Text="Tools" Foreground="#888" Margin="8,8,8,4" FontWeight="Bold" />
-            <Button Name="ToolBtn1" Classes="tool" Content="1: Add Point" />
-            <Button Name="ToolBtn2" Classes="tool" Content="2: Insert Edge" />
-            <Button Name="ToolBtn3" Classes="tool" Content="3: Move Point" />
-            <Button Name="ToolBtn4" Classes="tool" Content="4: Erase Edge" />
-            <Button Name="ToolBtn5" Classes="tool" Content="5: Connect" />
-            <Button Name="ToolBtn6" Classes="tool" Content="6: Remove Point" />
-            <Button Name="ToolBtn7" Classes="tool" Content="7: Height Brush" />
-            <Button Name="ToolBtn8" Classes="tool" Content="8: Trigger Brush" />
-        </StackPanel>
+        <Grid ColumnDefinitions="140,4,*,4,220">
+            <StackPanel Grid.Column="0" Background="#181820" Spacing="0">
+                <TextBlock Text="Tools" Foreground="#888" Margin="8,8,8,4" FontWeight="Bold" />
+                <Button Name="ToolBtn1" Classes="tool" Content="1: Add Point" />
+                <Button Name="ToolBtn2" Classes="tool" Content="2: Insert Edge" />
+                <Button Name="ToolBtn3" Classes="tool" Content="3: Move Point" />
+                <Button Name="ToolBtn4" Classes="tool" Content="4: Erase Edge" />
+                <Button Name="ToolBtn5" Classes="tool" Content="5: Connect" />
+                <Button Name="ToolBtn6" Classes="tool" Content="6: Remove Point" />
+                <Button Name="ToolBtn7" Classes="tool" Content="7: Height Brush" />
+                <Button Name="ToolBtn8" Classes="tool" Content="8: Trigger Brush" />
+            </StackPanel>
 
-        <Border DockPanel.Dock="Right" Width="220" Background="#181820" Padding="8">
-            <StackPanel Spacing="6">
+            <GridSplitter Grid.Column="1" Background="#3A3A42" ResizeDirection="Columns" />
+
+            <TabControl Grid.Column="2">
+                <TabItem Header="2D Editor">
+                    <local:Editor2DControl Name="Canvas" />
+                </TabItem>
+                <TabItem Header="3D Preview">
+                    <local:Preview3DControl Name="Preview3D" />
+                </TabItem>
+            </TabControl>
+
+            <GridSplitter Grid.Column="3" Background="#3A3A42" ResizeDirection="Columns" />
+
+            <Border Grid.Column="4" Background="#181820" Padding="8">
+                <StackPanel Spacing="6">
                 <TextBlock Text="Active Tool" Foreground="#888" />
                 <TextBlock Name="ActiveToolText" Text="Add Point" Foreground="#DDD" FontWeight="Bold" />
                 <Separator />
@@ -112,14 +127,6 @@
                 <TextBlock Text="Tip: middle-drag or Space+drag to pan, wheel to zoom. Esc resets the active tool's chain." Foreground="#666" TextWrapping="Wrap" />
             </StackPanel>
         </Border>
-
-        <TabControl>
-            <TabItem Header="2D Editor">
-                <local:Editor2DControl Name="Canvas" />
-            </TabItem>
-            <TabItem Header="3D Preview">
-                <local:Preview3DControl Name="Preview3D" />
-            </TabItem>
-        </TabControl>
+        </Grid>
     </DockPanel>
 </Window>

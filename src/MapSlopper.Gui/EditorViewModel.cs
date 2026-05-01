@@ -24,6 +24,15 @@ namespace MapSlopper.Gui;
 /// </summary>
 public sealed class EditorViewModel : INotifyPropertyChanged
 {
+    public sealed class AutoMapOptions
+    {
+        public int WidthCells { get; set; } = 96;
+        public int HeightCells { get; set; } = 96;
+        public int Complexity { get; set; } = 3;
+        public ushort Relief { get; set; } = 192;
+        public int? Seed { get; set; }
+    }
+
     private MapSlopperProject _project;
     private IEditorTool _activeTool;
     private string? _currentFilePath;
@@ -197,6 +206,28 @@ public sealed class EditorViewModel : INotifyPropertyChanged
         StatusMessage = "New project.";
     }
 
+    public void GenerateAutoMap(AutoMapOptions? options = null)
+    {
+        var o = options ?? new AutoMapOptions();
+        var result = AutoMapGenerator.Generate(_project, new AutoMapGenerator.Options
+        {
+            WidthCells = o.WidthCells,
+            HeightCells = o.HeightCells,
+            CellSize = _project.Heightmap.CellSize,
+            Complexity = o.Complexity,
+            Relief = o.Relief,
+            Seed = o.Seed,
+        });
+
+        Project = result.Project;
+        Undo.Clear();
+        CurrentFilePath = null;
+        IsDirty = true;
+        SelectedPointId = null;
+        _activeTool.Reset();
+        StatusMessage = $"Auto-map generated (seed {result.SeedUsed}, attempt {result.Attempts}).";
+    }
+
     public async Task OpenAsync(Window owner)
     {
         var dlg = new OpenFileDialog
@@ -334,6 +365,9 @@ public sealed class EditorViewModel : INotifyPropertyChanged
         var radius = 8.0 / Math.Max(_pixelsPerWorldUnit, 1e-6);
         var hit = _project.Outline.PickPoint(worldPos, radius);
         if (hit is not null) return hit.Position;
+
+        if (ShouldSnapToGrid) return SnapWorldToCell(worldPos);
+
         var step = _project.Heightmap.CellSize / 4.0;
         if (step <= 0) return worldPos;
         var sx = Math.Round(worldPos.X / step) * step;

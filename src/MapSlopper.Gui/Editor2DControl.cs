@@ -25,6 +25,17 @@ public class Editor2DControl : Control
     {
         Focusable = true;
         ClipToBounds = true;
+        
+        // Force a repaint and auto-frame whenever the control's size changes, 
+        // unless the user has taken manual control of the camera.
+        this.GetObservable(BoundsProperty).Subscribe(bounds => 
+        {
+            if (!_userHasModifiedCamera && bounds.Width > 50 && bounds.Height > 50)
+            {
+                FrameProject();
+            }
+            InvalidateVisual();
+        });
     }
 
     private EditorViewModel? _vm;
@@ -44,6 +55,7 @@ public class Editor2DControl : Control
     private bool _isPanning;
     private Point _lastPanScreen;
     private bool _hasAutoFramed;
+    private bool _userHasModifiedCamera;
 
     public void SetViewModel(EditorViewModel vm)
     {
@@ -67,13 +79,29 @@ public class Editor2DControl : Control
     {
         if (_vm is null) return;
         var (mn, mx) = _vm.Project.Heightmap.WorldBounds();
+        // If the heightmap is completely flat/empty, use a default fallback frame
+        if (Math.Abs(mx.X - mn.X) < 1.0 || Math.Abs(mx.Y - mn.Y) < 1.0)
+        {
+            mn = new Vec2(0, 0);
+            mx = new Vec2(1024, 1024);
+        }
+        
         CameraCenterWorld = new Vec2((mn.X + mx.X) * 0.5, (mn.Y + mx.Y) * 0.5);
         var w = Math.Max(1.0, Bounds.Width);
         var h = Math.Max(1.0, Bounds.Height);
         var zoomX = w / Math.Max(1.0, mx.X - mn.X);
         var zoomY = h / Math.Max(1.0, mx.Y - mn.Y);
-        PixelsPerWorldUnit = Math.Max(0.05, Math.Min(zoomX, zoomY) * 0.9);
+        PixelsPerWorldUnit = Math.Max(0.01, Math.Min(zoomX, zoomY) * 0.85); // 85% to give padding
         _vm.PixelsPerWorldUnit = PixelsPerWorldUnit;
+        _userHasModifiedCamera = false;
+
+        // Only mark as successfully framed if the canvas has been given a realistic layout size.
+        // Otherwise, it framed to a tiny 1x1 initial layout and we want it to frame again once visible.
+        if (Bounds.Width > 50 && Bounds.Height > 50)
+        {
+            _hasAutoFramed = true;
+        }
+
         InvalidateVisual();
     }
 
@@ -100,7 +128,7 @@ public class Editor2DControl : Control
         base.OnAttachedToVisualTree(e);
         Focus();
         // Schedule an auto-frame after layout is complete so Bounds is non-zero.
-        Dispatcher.UIThread.Post(() => FrameProject(), DispatcherPriority.Loaded);
+        Dispatcher.UIThread.Post(() => { if (!_hasAutoFramed) FrameProject(); }, DispatcherPriority.Loaded);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -156,6 +184,7 @@ public class Editor2DControl : Control
             $"World ({CursorWorld.X:0.0}, {CursorWorld.Y:0.0}) | Tool: {_vm.ActiveTool.Name} | Brush: {_vm.BrushSizeCells} | Paint: {_vm.PaintValue}";
         if (_isPanning)
         {
+            _userHasModifiedCamera = true;
             var dx = screen.X - _lastPanScreen.X;
             var dy = screen.Y - _lastPanScreen.Y;
             _lastPanScreen = screen;
@@ -192,6 +221,7 @@ public class Editor2DControl : Control
     {
         base.OnPointerWheelChanged(e);
         if (_vm is null) return;
+        _userHasModifiedCamera = true;
         var screen = e.GetPosition(this);
         var beforeWorld = ScreenToWorld(screen);
         var factor = e.Delta.Y > 0 ? 1.1 : (e.Delta.Y < 0 ? 1.0 / 1.1 : 1.0);
@@ -227,7 +257,6 @@ public class Editor2DControl : Control
         // once valid bounds arrive (catches late-layout scenarios inside TabControl).
         if (!_hasAutoFramed && Bounds.Width > 1 && Bounds.Height > 1)
         {
-            _hasAutoFramed = true;
             FrameProject();
             return; // FrameProject() calls InvalidateVisual(); let the next Render draw.
         }

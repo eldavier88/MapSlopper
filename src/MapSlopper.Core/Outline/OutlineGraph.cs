@@ -224,7 +224,29 @@ public sealed class OutlineGraph
         var verts = path.Select(id => _points[id].Position).ToList();
         var poly = new Polygon2D(verts);
         if (!poly.IsSimple()) return false;
-        polygon = poly.ToCcw();
+        var ccw = poly.ToCcw();
+
+        // Canonicalize starting vertex so TryGetClosedPolygon is deterministic
+        // regardless of which HashSet-internal order was used during the walk.
+        var minIdx = 0;
+        for (var i = 1; i < ccw.Count; i++)
+        {
+            var vi = ccw[i];
+            var vm = ccw[minIdx];
+            if (vi.X < vm.X || (vi.X == vm.X && vi.Y < vm.Y))
+                minIdx = i;
+        }
+        if (minIdx > 0)
+        {
+            var rot = new List<Vec2>(ccw.Count);
+            rot.AddRange(ccw.Vertices.Skip(minIdx));
+            rot.AddRange(ccw.Vertices.Take(minIdx));
+            polygon = new Polygon2D(rot);
+        }
+        else
+        {
+            polygon = ccw;
+        }
         return true;
     }
 
