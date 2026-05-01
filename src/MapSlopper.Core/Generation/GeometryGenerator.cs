@@ -83,7 +83,6 @@ public static class GeometryGenerator
         // 200 — so the upper window strip is always above any visible
         // floor surface that the wall borders. Split z =
         // zFloorBase + maxNeighbourRaw + splitHeight.
-        const double WallFloorOverlap = 16.0;
         var wallTop = ceilingBottom + project.CeilingThickness;
         var splitHeight = project.WallSplitHeight ?? project.CeilingHeight;
         (double Bottom, double SplitZ) WallVerticalsFor(int edgeIndex)
@@ -111,7 +110,7 @@ public static class GeometryGenerator
             }
             if (!found)
                 return (floorBase, floorBase + splitHeight);
-            var bottom = Math.Max(floorBase, floorBase + minRaw - WallFloorOverlap);
+            var bottom = floorBase;
             var splitZ = floorBase + maxRaw + splitHeight;
             return (bottom, splitZ);
         }

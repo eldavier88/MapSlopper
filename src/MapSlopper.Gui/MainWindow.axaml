@@ -64,58 +64,84 @@
             </Grid>
         </Border>
 
-        <StackPanel DockPanel.Dock="Left" Width="140" Background="#181820" Spacing="0">
-            <TextBlock Text="Tools" Foreground="#888" Margin="8,8,8,4" FontWeight="Bold" />
-            <Button Name="ToolBtn1" Classes="tool" Content="1: Add Point" />
-            <Button Name="ToolBtn2" Classes="tool" Content="2: Insert Edge" />
-            <Button Name="ToolBtn3" Classes="tool" Content="3: Move Point" />
-            <Button Name="ToolBtn4" Classes="tool" Content="4: Erase Edge" />
-            <Button Name="ToolBtn5" Classes="tool" Content="5: Connect" />
-            <Button Name="ToolBtn6" Classes="tool" Content="6: Remove Point" />
-            <Button Name="ToolBtn7" Classes="tool" Content="7: Height Brush" />
-            <Button Name="ToolBtn8" Classes="tool" Content="8: Trigger Brush" />
-        </StackPanel>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140" MinWidth="40" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="*" MinWidth="200" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="220" MinWidth="40" />
+            </Grid.ColumnDefinitions>
+            <ScrollViewer Grid.Column="0" Background="#181820"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="0">
+                    <TextBlock Text="Tools" Foreground="#888" Margin="8,8,8,4" FontWeight="Bold" />
+                    <Button Name="ToolBtn1" Classes="tool" Content="1: Add Point" />
+                    <Button Name="ToolBtn2" Classes="tool" Content="2: Insert Edge" />
+                    <Button Name="ToolBtn3" Classes="tool" Content="3: Move Point" />
+                    <Button Name="ToolBtn4" Classes="tool" Content="4: Erase Edge" />
+                    <Button Name="ToolBtn5" Classes="tool" Content="5: Connect" />
+                    <Button Name="ToolBtn6" Classes="tool" Content="6: Remove Point" />
+                    <Button Name="ToolBtn7" Classes="tool" Content="7: Height Brush" />
+                    <Button Name="ToolBtn8" Classes="tool" Content="8: Trigger Brush" />
+                </StackPanel>
+            </ScrollViewer>
 
-        <Border DockPanel.Dock="Right" Width="220" Background="#181820" Padding="8">
-            <StackPanel Spacing="6">
-                <TextBlock Text="Active Tool" Foreground="#888" />
-                <TextBlock Name="ActiveToolText" Text="Add Point" Foreground="#DDD" FontWeight="Bold" />
-                <Separator />
-                <TextBlock Text="Brush size (cells)" Foreground="#888" />
-                <NumericUpDown Name="BrushSize" Minimum="1" Maximum="64" Value="1" Increment="1" />
-                <TextBlock Text="Paint value (Quake units, 0..65535)" Foreground="#888" />
-                <NumericUpDown Name="PaintValue" Minimum="0" Maximum="65535" Value="64" Increment="16" />
-                <local:HeightHistogramControl Name="HeightHistogram" Height="80" />
-                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,0">
-                    <TextBlock Grid.Column="0" Text="Lo" Foreground="#888" VerticalAlignment="Center" Margin="0,0,4,0" />
-                    <Slider Grid.Column="1" Name="LevelsMinSlider" Minimum="0" Maximum="65535" />
-                    <TextBlock Grid.Column="2" Name="LevelsMinText" Foreground="#DDD" VerticalAlignment="Center" Width="48" TextAlignment="Right" />
-                </Grid>
-                <Grid ColumnDefinitions="Auto,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Hi" Foreground="#888" VerticalAlignment="Center" Margin="0,0,4,0" />
-                    <Slider Grid.Column="1" Name="LevelsMaxSlider" Minimum="0" Maximum="65535" />
-                    <TextBlock Grid.Column="2" Name="LevelsMaxText" Foreground="#DDD" VerticalAlignment="Center" Width="48" TextAlignment="Right" />
-                </Grid>
-                <TextBlock Text="Floor top Z = paint value. Auto-clamped to (ceilingHeight - 8) at export." Foreground="#666" TextWrapping="Wrap" FontSize="11" />
-                <Separator />
-                <CheckBox Name="SnapCheck" Content="Snap Move to grid (G / Shift)" Foreground="#DDD" />
-                <Separator />
-                <TextBlock Name="TriggerPaletteHeader" Text="Trigger palette" Foreground="#888" />
-                <StackPanel Name="TriggerPalette" Spacing="3" />
-                <Separator />
-                <TextBlock Name="CursorText" Text="Cursor: -" Foreground="#AAA" />
-                <TextBlock Name="ToolHintText" Text="" Foreground="#9CB" TextWrapping="Wrap" FontSize="11" />
-                <TextBlock Text="Tip: middle-drag or Space+drag to pan, wheel to zoom. Esc resets the active tool's chain." Foreground="#666" TextWrapping="Wrap" />
-            </StackPanel>
-        </Border>
+            <GridSplitter Grid.Column="1" Background="#2A2A30"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          ResizeDirection="Columns" />
 
-        <TabControl>
-            <TabItem Header="2D Editor">
-                <local:Editor2DControl Name="Canvas" />
-            </TabItem>
-            <TabItem Header="3D Preview">
-                <local:Preview3DControl Name="Preview3D" />
-            </TabItem>
-        </TabControl>
+            <TabControl Grid.Column="2">
+                <TabItem Header="2D Editor">
+                    <local:Editor2DControl Name="Canvas" />
+                </TabItem>
+                <TabItem Header="3D Preview">
+                    <local:Preview3DControl Name="Preview3D" />
+                </TabItem>
+            </TabControl>
+
+            <GridSplitter Grid.Column="3" Background="#2A2A30"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          ResizeDirection="Columns" />
+
+            <ScrollViewer Grid.Column="4" Background="#181820"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto"
+                          Padding="8">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Active Tool" Foreground="#888" />
+                    <TextBlock Name="ActiveToolText" Text="Add Point" Foreground="#DDD" FontWeight="Bold" />
+                    <Separator />
+                    <TextBlock Text="Brush size (cells)" Foreground="#888" />
+                    <NumericUpDown Name="BrushSize" Minimum="1" Maximum="64" Value="1" Increment="1" />
+                    <TextBlock Text="Paint value (Quake units, 0..65535)" Foreground="#888" />
+                    <NumericUpDown Name="PaintValue" Minimum="0" Maximum="65535" Value="64" Increment="16" />
+                    <local:HeightHistogramControl Name="HeightHistogram" Height="80" />
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,0">
+                        <TextBlock Grid.Column="0" Text="Lo" Foreground="#888" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <Slider Grid.Column="1" Name="LevelsMinSlider" Minimum="0" Maximum="65535" />
+                        <TextBlock Grid.Column="2" Name="LevelsMinText" Foreground="#DDD" VerticalAlignment="Center" Width="48" TextAlignment="Right" />
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Grid.Column="0" Text="Hi" Foreground="#888" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <Slider Grid.Column="1" Name="LevelsMaxSlider" Minimum="0" Maximum="65535" />
+                        <TextBlock Grid.Column="2" Name="LevelsMaxText" Foreground="#DDD" VerticalAlignment="Center" Width="48" TextAlignment="Right" />
+                    </Grid>
+                    <TextBlock Text="Floor top Z = paint value. Auto-clamped to (ceilingHeight - 8) at export." Foreground="#666" TextWrapping="Wrap" FontSize="11" />
+                    <Separator />
+                    <CheckBox Name="SnapCheck" Content="Snap Move to grid (G / Shift)" Foreground="#DDD" />
+                    <Separator />
+                    <TextBlock Name="TriggerPaletteHeader" Text="Trigger palette" Foreground="#888" />
+                    <StackPanel Name="TriggerPalette" Spacing="3" />
+                    <Separator />
+                    <TextBlock Name="CursorText" Text="Cursor: -" Foreground="#AAA" />
+                    <TextBlock Name="ToolHintText" Text="" Foreground="#9CB" TextWrapping="Wrap" FontSize="11" />
+                    <TextBlock Text="Tip: middle-drag or Space+drag to pan, wheel to zoom. Esc resets the active tool's chain." Foreground="#666" TextWrapping="Wrap" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
     </DockPanel>
 </Window>

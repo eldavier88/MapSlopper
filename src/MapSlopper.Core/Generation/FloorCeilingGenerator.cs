@@ -112,17 +112,15 @@ public static class FloorCeilingGenerator
                 ref clampedCells, ref clampedMaxRaw);
 
             // Per-piece BASE slab: top at the piece's lowest quantized cell
-            // top (baseTop), bottom at max(zFloorBase, baseTop - overlap).
-            // Matching the wall formula ensures that when all cells are
-            // painted high (e.g. raw=2000) the base slab is only
-            // StackOverlapRaw thick rather than a 2000-unit monolith.
-            // The walls use zFloorBase + minEdgeRaw - overlap as their
-            // bottom; the base slab bottom == baseTop - overlap aligns
-            // exactly with the wall bottom at the same height, keeping the
-            // sealed-box guarantee with no gap.
-            var pieceCcw = piece;
+            // top (baseTop), bottom at zFloorBase.  We extend the base slab
+            // all the way down to the global floor base so that adjacent
+            // convex pieces (which share decomposition diagonals with no
+            // walls) do not leave a vertical gap when their floor heights
+            // differ.
+            var pieceCcw = RectangleClipper.RemoveDegenerate(new System.Collections.Generic.List<Vec2>(piece));
+            if (pieceCcw.Count < 3) continue;
             var baseTop = zFloorBase + baseRaw;
-            var baseBottom = Math.Max(zFloorBase, baseTop - StackOverlapRaw);
+            var baseBottom = zFloorBase;
             if (baseTop > zFloorBase)
             {
                 result.FloorBrushes.Add(BrushFactory.MakeVerticalPrism(

@@ -25,6 +25,7 @@ internal static class Program
             {
                 "build" => Build(args),
                 "validate" => Validate(args),
+                "diag" => Diag.Run(args),
                 _ => Fail($"Unknown command: {args[0]}"),
             };
         }

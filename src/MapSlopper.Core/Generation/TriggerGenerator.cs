@@ -248,6 +248,20 @@ public static class TriggerGenerator
                     bottomTexture: type.Texture));
             }
             var centerXy = new Vec2(acc.cx / acc.area, acc.cy / acc.area);
+            // The area-weighted centroid can fall outside the polygon for
+            // non-convex trigger regions. If so, use the centroid of the
+            // largest individual brush piece, which is guaranteed interior.
+            if (!ccwPolygon.ContainsPoint(centerXy))
+            {
+                double bestArea = -1;
+                Vec2 bestCenter = centerXy;
+                foreach (var fp in pieces2)
+                {
+                    var a = Math.Abs(SignedArea(fp));
+                    if (a > bestArea) { bestArea = a; bestCenter = PolygonCentroid(fp); }
+                }
+                centerXy = bestCenter;
+            }
 
             var brushEntity = new MapEntity();
             foreach (var kv in type.EntityProperties)
@@ -275,7 +289,8 @@ public static class TriggerGenerator
             // the rest of the component, prefer the component max so the
             // target spawns above any reachable terrain.
             var floorTopAtCenter = zFloorBase + Math.Max(floorRawAtCenter, maxRaw);
-            var targetZ = floorTopAtCenter + 32;
+            var targetZMax = zCeilingTop - 32;
+            var targetZ = Math.Min(floorTopAtCenter + 32, targetZMax);
 
             var targetEntities = new List<MapEntity>();
             foreach (var spec in type.Targets)
