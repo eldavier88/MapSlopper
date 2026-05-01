@@ -3,7 +3,16 @@
              x:Class="MapSlopper.Gui.App"
              RequestedThemeVariant="Dark">
     <!-- Avalonia 11: FluentTheme.Mode was removed; theme variant is set
-         on the Application root via RequestedThemeVariant. -->
+         on the Application root via RequestedThemeVariant. The shared
+         design tokens (colours, font ramp) live in Theme/Theme.axaml so
+         windows can reach them via {DynamicResource Name}. -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="/Theme/Theme.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
     <Application.Styles>
         <FluentTheme />
     </Application.Styles>

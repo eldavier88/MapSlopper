@@ -36,6 +36,8 @@ public partial class MainWindow : Window
     private TextBlock _triggerPaletteHeader = null!;
     private StackPanel _triggerPalette = null!;
     private bool _suppressClosePrompt;
+    private UiSettings _uiSettings = new();
+    private RecentFiles _recent = new();
 
     public MainWindow()
     {
@@ -44,7 +46,161 @@ public partial class MainWindow : Window
         WireControls();
         WireMenus();
         WireKeyboard();
+        WireDragDrop();
+        LoadAndApplyUiSettings();
+        _recent = RecentFiles.Load();
+        RebuildRecentFilesMenu();
         Closing += OnClosingAsync;
+        // Defer the Welcome dialog to Opened so we have a real native
+        // window handle to parent against (ShowDialog requires the
+        // owner to already be visible, otherwise the call deadlocks
+        // on some platforms). Using a one-shot subscription keeps the
+        // dialog out of subsequent reactivations.
+        Opened += OnFirstOpened;
+    }
+
+    private async void OnFirstOpened(object? sender, EventArgs e)
+    {
+        Opened -= OnFirstOpened;
+        if (!_uiSettings.ShowWelcomeOnStartup) return;
+        // Skip the dialog when the user already has unsaved changes
+        // (e.g. relaunch via a debugger pinning the editor's state).
+        if (_vm.IsDirty) return;
+        var result = await WelcomeWindow.ShowAsync(this, _recent).ConfigureAwait(true);
+        if (result.DontShowAgain)
+        {
+            _uiSettings.ShowWelcomeOnStartup = false;
+            _uiSettings.Save();
+        }
+        switch (result.Action)
+        {
+            case WelcomeWindow.Action.New:
+                OnNew();
+                break;
+            case WelcomeWindow.Action.Open:
+                await _vm.OpenAsync(this).ConfigureAwait(true);
+                _canvas.FrameProject();
+                _preview.ReloadAssets();
+                break;
+            case WelcomeWindow.Action.AutoMap:
+                await OnAutoMapAsync().ConfigureAwait(true);
+                break;
+            case WelcomeWindow.Action.OpenRecent:
+                if (!string.IsNullOrEmpty(result.RecentPath))
+                {
+                    _vm.OpenPath(result.RecentPath);
+                    _canvas.FrameProject();
+                    _preview.ReloadAssets();
+                    _preview.FrameNow();
+                }
+                break;
+            case WelcomeWindow.Action.Cancel:
+            default:
+                // No-op: the editor stays in its default blank-canvas
+                // state, identical to launching without the dialog.
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Hook the window's <see cref="DragDrop.DragOverEvent"/> and
+    /// <see cref="DragDrop.DropEvent"/> tunnel/bubble events so the user
+    /// can drop a <c>.json</c> file (a saved MapSlopper project) onto
+    /// the window to open it without going through File > Open. The
+    /// AllowDrop attached property is set on Window in MainWindow.axaml.
+    /// </summary>
+    private void WireDragDrop()
+    {
+        AddHandler(DragDrop.DragOverEvent, (_, e) =>
+        {
+            // Indicate a copy effect when at least one path looks like
+            // a project file we'd actually accept on drop. Anything else
+            // gets None so the OS shows the "no entry" cursor.
+            e.DragEffects = HasProjectPath(e) ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+        });
+        AddHandler(DragDrop.DropEvent, async (_, e) =>
+        {
+            var path = TryGetFirstProjectPath(e);
+            if (string.IsNullOrEmpty(path)) return;
+            // Mirror the unsaved-changes prompt the menu Open path uses
+            // so the user doesn't lose work by accidentally dropping a
+            // file. If they cancel, leave the project untouched.
+            if (_vm.IsDirty)
+            {
+                var choice = await PromptUnsavedChangesAsync().ConfigureAwait(true);
+                if (choice == UnsavedChoice.Cancel) return;
+                if (choice == UnsavedChoice.Save)
+                {
+                    var saved = await _vm.SaveAsync(this).ConfigureAwait(true);
+                    if (!saved) return;
+                }
+            }
+            _vm.OpenPath(path);
+            _canvas.FrameProject();
+            _preview.ReloadAssets();
+            _preview.FrameNow();
+            e.Handled = true;
+        });
+    }
+
+    private static bool HasProjectPath(DragEventArgs e) =>
+        TryGetFirstProjectPath(e) is not null;
+
+    /// <summary>
+    /// Pull the first <c>.json</c> path out of the drag payload's file
+    /// list. Anything else (folders, non-project files, multi-select
+    /// secondaries) is ignored. Returns null when nothing acceptable was
+    /// dropped, in which case the drop is rejected.
+    /// </summary>
+    private static string? TryGetFirstProjectPath(DragEventArgs e)
+    {
+        // Avalonia 11.3 introduced DataTransfer (IDataTransfer) as the
+        // replacement for the obsolete IDataObject. Fall back to the
+        // legacy Data property when DataTransfer is null so plugins /
+        // older drag sources keep working.
+#pragma warning disable CS0618 // legacy Data fallback is intentional
+        var legacyData = e.Data;
+#pragma warning restore CS0618
+        var files = legacyData?.GetFiles();
+        if (files is null) return null;
+        foreach (var f in files)
+        {
+            // Avalonia 11 exposes IStorageItem from the drag payload;
+            // .Path is a file:// URI whose LocalPath is the on-disk
+            // path. Skip directories and anything that isn't .json.
+            var local = f.Path.LocalPath;
+            if (string.IsNullOrEmpty(local)) continue;
+            if (local.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                return local;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Resolve the left + right side-panel column definitions from the
+    /// named MainGrid. ColumnDefinition isn't an IControl so it can't be
+    /// fetched via FindControl; we have to go through the Grid first.
+    /// </summary>
+    private (ColumnDefinition Left, ColumnDefinition Right)? GetSidePanelColumns()
+    {
+        var grid = this.FindControl<Grid>("MainGrid");
+        if (grid is null || grid.ColumnDefinitions.Count < 5) return null;
+        return (grid.ColumnDefinitions[0], grid.ColumnDefinitions[4]);
+    }
+
+    private void LoadAndApplyUiSettings()
+    {
+        _uiSettings = UiSettings.Load();
+        if (GetSidePanelColumns() is not { } cols) return;
+        _uiSettings.ApplyTo(this, cols.Left, cols.Right);
+    }
+
+    private void CaptureAndSaveUiSettings()
+    {
+        if (GetSidePanelColumns() is not { } cols) return;
+        _uiSettings.CaptureFrom(this, cols.Left, cols.Right);
+        _uiSettings.Save();
     }
 
     private void BuildViewModel()
@@ -53,6 +209,61 @@ public partial class MainWindow : Window
         _vm.PropertyChanged += OnVmPropertyChanged;
         _vm.Undo.Changed += OnUndoChanged;
         _vm.RepaintRequested += UpdateBottomBar;
+        // Track project open / save events so the File > Open Recent
+        // submenu and the Welcome dialog's "Recent" buttons stay in sync.
+        // Failure case (added=false) prunes the path so a deleted file
+        // doesn't linger in the menu.
+        _vm.RecentFilesChanged += (path, added) =>
+        {
+            if (added) _recent.Add(path);
+            else _recent.Remove(path);
+            _recent.Save();
+            RebuildRecentFilesMenu();
+        };
+    }
+
+    /// <summary>
+    /// Rebuild the <c>File &gt; Open Recent</c> submenu from
+    /// <see cref="RecentFiles.Paths"/>. Called once at launch and after
+    /// every open/save (via <see cref="EditorViewModel.RecentFilesChanged"/>).
+    /// Adds a "Clear Recent" entry at the bottom when there's at least
+    /// one path.
+    /// </summary>
+    private void RebuildRecentFilesMenu()
+    {
+        var menu = this.FindControl<MenuItem>("MenuOpenRecent");
+        if (menu is null) return;
+        var items = new System.Collections.Generic.List<object>();
+        if (_recent.Paths.Count == 0)
+        {
+            items.Add(new MenuItem
+            {
+                Header = "(no recent projects)",
+                IsEnabled = false,
+            });
+        }
+        else
+        {
+            for (var i = 0; i < _recent.Paths.Count; i++)
+            {
+                var path = _recent.Paths[i];
+                var display = $"{i + 1}. {System.IO.Path.GetFileName(path)}";
+                var item = new MenuItem { Header = display };
+                ToolTip.SetTip(item, path);
+                item.Click += (_, _) => _vm.OpenPath(path);
+                items.Add(item);
+            }
+            items.Add(new Separator());
+            var clear = new MenuItem { Header = "Clear Recent" };
+            clear.Click += (_, _) =>
+            {
+                _recent.Clear();
+                _recent.Save();
+                RebuildRecentFilesMenu();
+            };
+            items.Add(clear);
+        }
+        menu.ItemsSource = items;
     }
 
     private void WireControls()
@@ -331,6 +542,7 @@ public partial class MainWindow : Window
         if (ctrl && e.Key == Key.O) { await _vm.OpenAsync(this).ConfigureAwait(true); e.Handled = true; return; }
         if (ctrl && e.Key == Key.N) { OnNew(); e.Handled = true; return; }
         if (ctrl && e.Key == Key.E) { await _vm.ExportMapAsync(this).ConfigureAwait(true); e.Handled = true; return; }
+        if (ctrl && shift && e.Key == Key.P) { await ShowCommandPaletteAsync().ConfigureAwait(true); e.Handled = true; return; }
 
         // Skip single-key tool shortcuts and Frame shortcut when a text input has focus
         // (otherwise typing in NumericUpDown / TextBox steals our key).
@@ -415,6 +627,59 @@ public partial class MainWindow : Window
         // already gets a Save? prompt on Quit which is the requirement spec).
         _vm.NewProject();
         _canvas.FrameProject();
+    }
+
+    /// <summary>
+    /// Build the command palette's catalogue from the existing menu
+    /// handlers and tool list. Reuses the same delegates so behaviour
+    /// stays identical to clicking the menu / pressing the shortcut.
+    /// </summary>
+    private System.Collections.Generic.IReadOnlyList<CommandPaletteWindow.Command> BuildCommandCatalogue()
+    {
+        var cmds = new System.Collections.Generic.List<CommandPaletteWindow.Command>
+        {
+            new("New project",                "Ctrl+N",        () => { OnNew(); return Task.CompletedTask; }),
+            new("Open project...",            "Ctrl+O",        async () => { await _vm.OpenAsync(this).ConfigureAwait(true); _canvas.FrameProject(); _preview.ReloadAssets(); }),
+            new("Save",                       "Ctrl+S",        async () => { await _vm.SaveAsync(this).ConfigureAwait(true); }),
+            new("Save As...",                 "Ctrl+Shift+S",  async () => { await _vm.SaveAsAsync(this).ConfigureAwait(true); }),
+            new("Export .map...",             "Ctrl+E",        async () => { await _vm.ExportMapAsync(this).ConfigureAwait(true); }),
+            new("Generate Automatic Map...",  null,            () => OnAutoMapAsync()),
+            new("Undo",                       "Ctrl+Z",        () => { _vm.UndoAction(); return Task.CompletedTask; }),
+            new("Redo",                       "Ctrl+Y",        () => { _vm.RedoAction(); return Task.CompletedTask; }),
+            new("Frame project (2D / 3D)",    "F",             () => { if (IsPreview3DFocused()) _preview.FrameNow(); else _canvas.FrameProject(); return Task.CompletedTask; }),
+            new("Levels...",                  null,            () => { OpenLevelsWindow(); return Task.CompletedTask; }),
+            new("Add Asset Root...",          null,            () => OnAddAssetRootAsync()),
+            new("Add Asset .pk3...",          null,            () => OnAddAssetPk3Async()),
+            new("Clear Asset Roots",          null,            () => { OnClearAssetRoots(); return Task.CompletedTask; }),
+            new("Toggle Snap-to-Grid",        "G",             () => { _vm.SnapToGrid = !_vm.SnapToGrid; _snapCheck.IsChecked = _vm.SnapToGrid; _vm.StatusMessage = "Snap to grid: " + (_vm.SnapToGrid ? "ON" : "OFF"); return Task.CompletedTask; }),
+            new("About MapSlopper",           null,            () => { ShowAbout(); return Task.CompletedTask; }),
+        };
+        // Tool shortcuts (1..8). The catalogue lists them by name so
+        // typing "height" finds the height brush, etc.
+        for (var i = 0; i < _vm.Tools.Length; i++)
+        {
+            var idx = i;
+            cmds.Add(new CommandPaletteWindow.Command(
+                $"Select tool: {_vm.Tools[i].Name}",
+                $"{i + 1}",
+                () => { SelectTool(idx); return Task.CompletedTask; }));
+        }
+        return cmds;
+    }
+
+    private async Task ShowCommandPaletteAsync()
+    {
+        var cmds = BuildCommandCatalogue();
+        var picked = await CommandPaletteWindow.ShowAsync(this, cmds).ConfigureAwait(true);
+        if (picked is null) return;
+        try
+        {
+            await picked.Run().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _vm.StatusMessage = $"Command failed: {ex.Message}";
+        }
     }
 
     private async Task OnAutoMapAsync()
@@ -672,8 +937,8 @@ public partial class MainWindow : Window
 
     private async void OnClosingAsync(object? sender, CancelEventArgs e)
     {
-        if (_suppressClosePrompt) return;
-        if (!_vm.IsDirty) return;
+        if (_suppressClosePrompt) { CaptureAndSaveUiSettings(); return; }
+        if (!_vm.IsDirty) { CaptureAndSaveUiSettings(); return; }
         e.Cancel = true;
         var choice = await PromptUnsavedChangesAsync().ConfigureAwait(true);
         if (choice == UnsavedChoice.Cancel) return;
@@ -683,6 +948,7 @@ public partial class MainWindow : Window
             if (!saved) return;
         }
         _suppressClosePrompt = true;
+        CaptureAndSaveUiSettings();
         Close();
     }
 

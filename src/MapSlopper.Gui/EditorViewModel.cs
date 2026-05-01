@@ -228,6 +228,11 @@ public sealed class EditorViewModel : INotifyPropertyChanged
         StatusMessage = $"Auto-map generated (seed {result.SeedUsed}, attempt {result.Attempts}).";
     }
 
+    /// <summary>
+    /// Open a project via file picker, then route through
+    /// <see cref="OpenPathAsync"/> so the path is recorded in the
+    /// <see cref="RecentFiles"/> MRU list.
+    /// </summary>
     public async Task OpenAsync(Window owner)
     {
         // Avalonia 11 deprecated OpenFileDialog / SaveFileDialog in favour
@@ -254,6 +259,19 @@ public sealed class EditorViewModel : INotifyPropertyChanged
         if (files is null || files.Count == 0) return;
         var path = files[0].Path.LocalPath;
         if (string.IsNullOrEmpty(path)) return;
+        OpenPath(path);
+    }
+
+    /// <summary>
+    /// Load a project from <paramref name="path"/> directly (no picker).
+    /// Used by drag-drop, the Welcome dialog's "Recent" buttons, and the
+    /// <c>File &gt; Open Recent</c> menu. Logs the path to the MRU list
+    /// on success and removes it on failure (so a deleted file doesn't
+    /// linger in the menu).
+    /// </summary>
+    public void OpenPath(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
         try
         {
             var loaded = ProjectJsonIo.Load(path);
@@ -264,12 +282,21 @@ public sealed class EditorViewModel : INotifyPropertyChanged
             SelectedPointId = null;
             _activeTool.Reset();
             StatusMessage = $"Opened {Path.GetFileName(path)}.";
+            RecentFilesChanged?.Invoke(path, true);
         }
         catch (Exception ex)
         {
             StatusMessage = "Open failed: " + ex.Message;
+            RecentFilesChanged?.Invoke(path, false);
         }
     }
+
+    /// <summary>
+    /// Raised whenever a path was opened (added=true) or failed to open
+    /// (added=false). The main window subscribes and updates the
+    /// <see cref="RecentFiles"/> store accordingly.
+    /// </summary>
+    public event Action<string, bool>? RecentFilesChanged;
 
     public async Task<bool> SaveAsync(Window owner)
     {
@@ -314,6 +341,7 @@ public sealed class EditorViewModel : INotifyPropertyChanged
             CurrentFilePath = path;
             IsDirty = false;
             StatusMessage = $"Saved {Path.GetFileName(path)}.";
+            RecentFilesChanged?.Invoke(path, true);
             return true;
         }
         catch (Exception ex)

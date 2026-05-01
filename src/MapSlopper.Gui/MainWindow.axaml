@@ -4,12 +4,14 @@
         x:Class="MapSlopper.Gui.MainWindow"
         Width="1200" Height="800"
         Title="MapSlopper"
-        Background="#1A1A1F">
+        Background="{DynamicResource SurfaceWindow}"
+        FontFamily="{DynamicResource FontUi}"
+        DragDrop.AllowDrop="True">
     <Window.Styles>
         <Style Selector="Button.tool">
-            <Setter Property="Background" Value="#2A2A30" />
-            <Setter Property="Foreground" Value="#E8E8E8" />
-            <Setter Property="BorderBrush" Value="#3A3A42" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderDefault}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -17,17 +19,17 @@
             <Setter Property="Margin" Value="2,1" />
         </Style>
         <Style Selector="Button.tool:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#3A3A45" />
-            <Setter Property="TextBlock.Foreground" Value="#FFFFFF" />
+            <Setter Property="Background" Value="{DynamicResource BorderDefault}" />
+            <Setter Property="TextBlock.Foreground" Value="{DynamicResource TextOnAccent}" />
         </Style>
         <Style Selector="Button.tool.active">
-            <Setter Property="Background" Value="#0078D4" />
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="BorderBrush" Value="#1F8FE6" />
+            <Setter Property="Background" Value="{DynamicResource AccentPrimary}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextOnAccent}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
         </Style>
         <Style Selector="Button.tool.active /template/ ContentPresenter">
-            <Setter Property="Background" Value="#0078D4" />
-            <Setter Property="TextBlock.Foreground" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource AccentPrimary}" />
+            <Setter Property="TextBlock.Foreground" Value="{DynamicResource TextOnAccent}" />
         </Style>
     </Window.Styles>
     <DockPanel LastChildFill="True">
@@ -36,6 +38,7 @@
                 <MenuItem Name="MenuNew" Header="_New" InputGesture="Ctrl+N" />
                 <MenuItem Name="MenuAutoMap" Header="_Generate Automatic Map..." />
                 <MenuItem Name="MenuOpen" Header="_Open..." InputGesture="Ctrl+O" />
+                <MenuItem Name="MenuOpenRecent" Header="Open _Recent" />
                 <MenuItem Name="MenuSave" Header="_Save" InputGesture="Ctrl+S" />
                 <MenuItem Name="MenuSaveAs" Header="Save _As..." InputGesture="Ctrl+Shift+S" />
                 <Separator />
@@ -69,7 +72,14 @@
             </Grid>
         </Border>
 
-        <Grid ColumnDefinitions="140,4,*,4,220">
+        <Grid Name="MainGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140" MinWidth="40" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="*" MinWidth="200" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="220" MinWidth="40" />
+            </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Background="#181820" Spacing="0">
                 <TextBlock Text="Tools" Foreground="#888" Margin="8,8,8,4" FontWeight="Bold" />
                 <Button Name="ToolBtn1" Classes="tool" Content="1: Add Point" />

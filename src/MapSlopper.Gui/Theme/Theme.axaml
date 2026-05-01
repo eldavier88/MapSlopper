@@ -1,0 +1,62 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+    Centralised design tokens for MapSlopper's dark theme. App.axaml
+    pulls this dictionary in via <ResourceInclude> so every window /
+    control can reach these brushes by name with {DynamicResource Foo}.
+
+    Naming convention:
+      Surface*  - background fills (window, panel, hover, raised)
+      Border*   - 1px hairlines / dividers
+      Text*     - foreground text colours by emphasis level
+      Accent*   - the brand blue (active tools, primary buttons, focus
+                  rings) so we only have one place to retune saturation
+      Trigger*  - heightmap trigger paint overlay defaults
+    -->
+
+    <!-- Surface colours, dark-only for now. -->
+    <SolidColorBrush x:Key="SurfaceWindow"  Color="#16161A" />
+    <SolidColorBrush x:Key="SurfacePanel"   Color="#181820" />
+    <SolidColorBrush x:Key="SurfaceCard"    Color="#1E1E24" />
+    <SolidColorBrush x:Key="SurfaceRaised"  Color="#24242C" />
+    <SolidColorBrush x:Key="SurfaceHover"   Color="#2A2A30" />
+    <SolidColorBrush x:Key="SurfaceMuted"   Color="#222222" />
+
+    <!-- Border / divider lines. -->
+    <SolidColorBrush x:Key="BorderSubtle"   Color="#2A2A32" />
+    <SolidColorBrush x:Key="BorderDefault"  Color="#3A3A42" />
+    <SolidColorBrush x:Key="BorderStrong"   Color="#4A4A52" />
+
+    <!-- Text colours by emphasis. -->
+    <SolidColorBrush x:Key="TextPrimary"    Color="#E8E8EE" />
+    <SolidColorBrush x:Key="TextSecondary"  Color="#C0C0C8" />
+    <SolidColorBrush x:Key="TextMuted"      Color="#9A9AA4" />
+    <SolidColorBrush x:Key="TextDisabled"   Color="#6F6F7A" />
+    <SolidColorBrush x:Key="TextOnAccent"   Color="#FFFFFF" />
+
+    <!-- Brand accent (focus rings, primary buttons, active states). -->
+    <SolidColorBrush x:Key="AccentPrimary"  Color="#1F6AE0" />
+    <SolidColorBrush x:Key="AccentHover"    Color="#3A82F0" />
+    <SolidColorBrush x:Key="AccentBorder"   Color="#4A90FF" />
+    <SolidColorBrush x:Key="AccentSubtle"   Color="#5B8DEF" />
+
+    <!-- Status colours used by the asset-add result dialog and the
+         3D preview's empty-state checklist. -->
+    <SolidColorBrush x:Key="StatusGood"     Color="#3FCB8E" />
+    <SolidColorBrush x:Key="StatusWarn"     Color="#FFA928" />
+    <SolidColorBrush x:Key="StatusBad"      Color="#E55A5A" />
+
+    <!-- Editor canvas-only colours (used by Editor2DControl /
+         Preview3DControl directly in code rather than XAML). Kept as
+         resources so the Theme phase can keep retuning them in one
+         place once the design system layer (Phase 2.x) is finished. -->
+    <SolidColorBrush x:Key="CanvasBackground" Color="#181A1F" />
+    <SolidColorBrush x:Key="CanvasGridFaint"  Color="#404040" />
+    <SolidColorBrush x:Key="CanvasGridStrong" Color="#606060" />
+
+    <!-- Editor type ramp. The Inter family ships from the
+         Avalonia.Fonts.Inter NuGet package; falls back to Segoe UI
+         on machines where Inter loading fails. -->
+    <FontFamily x:Key="FontDisplay">avares://Avalonia.Fonts.Inter/Assets#Inter, Segoe UI, sans-serif</FontFamily>
+    <FontFamily x:Key="FontUi">avares://Avalonia.Fonts.Inter/Assets#Inter, Segoe UI, sans-serif</FontFamily>
+</ResourceDictionary>
