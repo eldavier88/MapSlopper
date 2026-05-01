@@ -125,7 +125,7 @@ public sealed class AssetLibrary
     /// <summary>
     /// Resolve a Q3 texture name (e.g. <c>random/floor</c> or
     /// <c>textures/random/floor</c>) to bytes. Returns null when nothing
-    /// matches across all roots.
+    /// matches across all roots and the shader carries no fallback color.
     /// </summary>
     public ResolvedTexture? Resolve(string textureName)
     {
@@ -136,12 +136,17 @@ public sealed class AssetLibrary
         var shaderKey = "textures/" + normalized;
 
         var emissive = false;
+        Q3ShaderParser.ShaderInfo? shader = null;
         // 1) Try shader's primary map.
-        if (_shaders.TryGetValue(shaderKey, out var sh) && sh.PrimaryMap is { } map)
+        if (_shaders.TryGetValue(shaderKey, out var sh))
         {
+            shader = sh;
             emissive = sh.IsEmissive;
-            var resolved = TryLoadFile(map);
-            if (resolved is not null) return resolved with { IsEmissive = emissive };
+            if (sh.PrimaryMap is { } map)
+            {
+                var resolved = TryLoadFile(map);
+                if (resolved is not null) return resolved with { IsEmissive = emissive };
+            }
         }
         // 2) Fall back to direct path probes.
         var basePath = "textures/" + normalized;
@@ -151,14 +156,50 @@ public sealed class AssetLibrary
             var resolved = TryLoadFile(basePath + ext);
             if (resolved is not null) return resolved with { IsEmissive = emissive };
         }
-        
+
         // 3) Fall back to allowing the asset root itself to BE the textures folder (try without 'textures/' prefix)
         foreach (var ext in orderings)
         {
             var resolved = TryLoadFile(normalized + ext);
             if (resolved is not null) return resolved with { IsEmissive = emissive };
         }
+
+        // 4) Fall back to the shader's stage color (rgbGen const on a
+        //    $whiteimage stage). Synthesize a 1x1 RGBA texture so the
+        //    preview shows the *intended* color, not a per-axis tint.
+        //    This is the path that makes MapSlopper's bundled
+        //    mapslopper.shader visible without shipping any .tga files.
+        if (shader is { StageColor: { } sc })
+        {
+            return SynthesizeFlat(shaderKey, sc.R, sc.G, sc.B, emissive);
+        }
         return null;
+    }
+
+    private static ResolvedTexture SynthesizeFlat(string label, double r, double g, double b, bool emissive)
+    {
+        // Q3 rgbGen const semantics: each component is a multiplier on a
+        // white texel, typically already in [0..1]. Clamp + gamma-correct
+        // (sRGB approx via a 2.2 power) so the screen color matches what
+        // q3map2 + the engine produce.
+        static byte ToByte(double v)
+        {
+            v = Math.Clamp(v, 0.0, 1.0);
+            v = Math.Pow(v, 1.0 / 2.2);
+            return (byte)Math.Round(v * 255.0);
+        }
+        var rgba = new byte[]
+        {
+            ToByte(r), ToByte(g), ToByte(b), 255,
+        };
+        return new ResolvedTexture
+        {
+            ResolvedPath = "synth:" + label,
+            Width = 1,
+            Height = 1,
+            Rgba = rgba,
+            IsEmissive = emissive,
+        };
     }
 
     private ResolvedTexture? TryLoadFile(string relPath)

@@ -128,6 +128,21 @@ public class MainWindow : Window
         WireToolButton("ToolBtn8", 7);
         BuildTriggerPalette();
 
+        // Force the 3D preview to refresh whenever its tab becomes
+        // selected. Without this, an asset-root add or heightmap edit
+        // performed while the 2D tab was active wouldn't pick up until
+        // the user did something else inside the 3D pane.
+        var tabs = this.FindControl<TabControl>("ViewTabs");
+        var tab3D = this.FindControl<TabItem>("Tab3D");
+        if (tabs is not null && tab3D is not null)
+        {
+            tabs.SelectionChanged += (_, _) =>
+            {
+                if (ReferenceEquals(tabs.SelectedItem, tab3D))
+                    _preview.ForceRefresh();
+            };
+        }
+
         UpdateBottomBar();
         UpdateActiveToolText();
         UpdateToolButtons(0); // highlight first tool on startup
@@ -383,7 +398,7 @@ public class MainWindow : Window
 
     private async Task OnAutoMapAsync()
     {
-        var opts = await PromptAutoMapOptionsAsync().ConfigureAwait(true);
+        var opts = await AutoMapWizardWindow.ShowAsync(this).ConfigureAwait(true);
         if (opts is null) return;
         try
         {
@@ -396,102 +411,6 @@ public class MainWindow : Window
         {
             _vm.StatusMessage = "Automatic generation failed: " + ex.Message;
         }
-    }
-
-    private Task<EditorViewModel.AutoMapOptions?> PromptAutoMapOptionsAsync()
-    {
-        var tcs = new TaskCompletionSource<EditorViewModel.AutoMapOptions?>();
-        var dlg = new Window
-        {
-            Title = "Generate Automatic Map",
-            Width = 360,
-            Height = 300,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-        };
-
-        var widthUpDown = new NumericUpDown { Minimum = 24, Maximum = 512, Increment = 8, Value = 96 };
-        var heightUpDown = new NumericUpDown { Minimum = 24, Maximum = 512, Increment = 8, Value = 96 };
-        var complexityUpDown = new NumericUpDown { Minimum = 1, Maximum = 5, Increment = 1, Value = 3 };
-        var reliefUpDown = new NumericUpDown { Minimum = 32, Maximum = 4096, Increment = 16, Value = 192 };
-        var seedBox = new TextBox { Watermark = "empty = random" };
-
-        static StackPanel Row(string label, Control editor)
-        {
-            return new StackPanel
-            {
-                Orientation = Avalonia.Layout.Orientation.Horizontal,
-                Spacing = 8,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = label,
-                        Width = 130,
-                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                    },
-                    editor,
-                },
-            };
-        }
-
-        var panel = new StackPanel { Margin = new Avalonia.Thickness(16), Spacing = 10 };
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Creates a complete, exportable map from a seed (outline + floor heights + triggers).",
-            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-        });
-        panel.Children.Add(Row("Width (cells)", widthUpDown));
-        panel.Children.Add(Row("Height (cells)", heightUpDown));
-        panel.Children.Add(Row("Complexity (1-5)", complexityUpDown));
-        panel.Children.Add(Row("Relief (height)", reliefUpDown));
-        panel.Children.Add(Row("Seed", seedBox));
-
-        var buttons = new StackPanel
-        {
-            Orientation = Avalonia.Layout.Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-        };
-        var genBtn = new Button { Content = "Generate" };
-        var cancelBtn = new Button { Content = "Cancel" };
-        buttons.Children.Add(genBtn);
-        buttons.Children.Add(cancelBtn);
-        panel.Children.Add(buttons);
-
-        genBtn.Click += (_, _) =>
-        {
-            int? seed = null;
-            if (!string.IsNullOrWhiteSpace(seedBox.Text))
-            {
-                if (!int.TryParse(seedBox.Text, out var parsed))
-                {
-                    _vm.StatusMessage = "Seed must be a valid integer.";
-                    return;
-                }
-                seed = parsed;
-            }
-
-            var opts = new EditorViewModel.AutoMapOptions
-            {
-                WidthCells = (int)Math.Round(widthUpDown.Value),
-                HeightCells = (int)Math.Round(heightUpDown.Value),
-                Complexity = (int)Math.Round(complexityUpDown.Value),
-                Relief = (ushort)Math.Clamp((int)Math.Round(reliefUpDown.Value), 32, ushort.MaxValue),
-                Seed = seed,
-            };
-            tcs.TrySetResult(opts);
-            dlg.Close();
-        };
-        cancelBtn.Click += (_, _) =>
-        {
-            tcs.TrySetResult(null);
-            dlg.Close();
-        };
-        dlg.Closed += (_, _) => tcs.TrySetResult(null);
-        dlg.Content = panel;
-        _ = dlg.ShowDialog(this);
-        return tcs.Task;
     }
 
     private void OpenLevelsWindow()
@@ -521,13 +440,26 @@ public class MainWindow : Window
 
     private async Task OnAddAssetRootAsync()
     {
-        var dlg = new OpenFolderDialog { Title = "Choose an asset root folder (e.g. baseq3)" };
+        var dlg = new OpenFolderDialog
+        {
+            Title = "Pick a baseq3, GameData/base, or other Q3-style content folder",
+        };
         var picked = await dlg.ShowAsync(this).ConfigureAwait(true);
         if (string.IsNullOrEmpty(picked)) return;
-        if (_vm.Project.AssetRoots.Contains(picked)) { _vm.StatusMessage = "Asset root already added."; return; }
-        _vm.Project.AssetRoots.Add(picked);
+
+        // Auto-correct common picks: parent of baseq3, parent of GameData,
+        // etc. so the user doesn't have to know exactly which level the
+        // shader/texture trees live at.
+        var resolved = AssetRootHelper.ResolvePickedDirectory(picked);
+        if (_vm.Project.AssetRoots.Contains(resolved))
+        {
+            _vm.StatusMessage = "Asset root already added.";
+            return;
+        }
+
+        _vm.Project.AssetRoots.Add(resolved);
         _preview.ReloadAssets();
-        _vm.StatusMessage = $"Asset root added: {picked}";
+        await ShowAssetRootResultAsync(resolved, picked).ConfigureAwait(true);
     }
 
     private async Task OnAddAssetPk3Async()
@@ -547,7 +479,7 @@ public class MainWindow : Window
         if (_vm.Project.AssetRoots.Contains(path)) { _vm.StatusMessage = "PK3 already added."; return; }
         _vm.Project.AssetRoots.Add(path);
         _preview.ReloadAssets();
-        _vm.StatusMessage = $".pk3 added: {path}";
+        await ShowAssetRootResultAsync(path, path).ConfigureAwait(true);
     }
 
     private void OnClearAssetRoots()
@@ -556,6 +488,155 @@ public class MainWindow : Window
         _vm.Project.AssetRoots.Clear();
         _preview.ReloadAssets();
         _vm.StatusMessage = "Asset roots cleared.";
+    }
+
+    /// <summary>
+    /// Shows a structured feedback dialog after an asset-root add so the
+    /// user knows whether the new root actually contributed shaders and
+    /// whether the *current project's* textures (floor / wall / ceiling /
+    /// window) resolve against it. Replaces the silent
+    /// <c>StatusMessage = "Asset root added"</c> behaviour that left users
+    /// guessing whether anything happened.
+    /// </summary>
+    private Task ShowAssetRootResultAsync(string resolvedPath, string originallyPicked)
+    {
+        var assets = _preview.Assets;
+        var lib = MapSlopper.Core.Assets.AssetLibrary.Load(new[] { resolvedPath });
+        var addedShaders = lib.ShaderCount;
+
+        // Probe each project texture to tell the user "your project uses
+        // these four shaders; here are the ones this root resolves".
+        var probes = new (string Label, string Name)[]
+        {
+            ("Floor",   _vm.Project.FloorTexture),
+            ("Wall",    _vm.Project.WallTexture),
+            ("Ceiling", _vm.Project.CeilingTexture),
+            ("Window",  _vm.Project.WindowTexture),
+        };
+
+        var w = new Window
+        {
+            Title = "Asset root added",
+            Width = 460,
+            Height = 380,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1F)),
+        };
+
+        var stack = new StackPanel { Margin = new Avalonia.Thickness(20), Spacing = 10 };
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = addedShaders > 0 ? "Asset root mounted" : "Asset root mounted (no shaders found)",
+            Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xEE)),
+            FontWeight = Avalonia.Media.FontWeight.SemiBold,
+            FontSize = 16,
+        });
+
+        var pathText = string.Equals(resolvedPath, originallyPicked, StringComparison.OrdinalIgnoreCase)
+            ? resolvedPath
+            : $"{resolvedPath}\n(auto-detected from {originallyPicked})";
+        stack.Children.Add(new TextBlock
+        {
+            Text = pathText,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xA8, 0xA8, 0xB3)),
+            FontSize = 12,
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+        });
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = $"Indexed {addedShaders} shader definition{(addedShaders == 1 ? "" : "s")} from this root.",
+            Foreground = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            Margin = new Avalonia.Thickness(0, 6, 0, 0),
+        });
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "Project textures resolved (combined with bundled fallback):",
+            Foreground = new SolidColorBrush(Color.FromRgb(0xA8, 0xA8, 0xB3)),
+            FontSize = 12,
+            Margin = new Avalonia.Thickness(0, 8, 0, 0),
+        });
+
+        foreach (var (label, name) in probes)
+        {
+            var resolved = assets.Resolve(name);
+            var row = new StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                Spacing = 10,
+                Margin = new Avalonia.Thickness(0, 2, 0, 0),
+            };
+            // Color swatch: 1x1 RGBA decode for the shader's intended color.
+            var swatchColor = ColorFromResolved(resolved);
+            row.Children.Add(new Border
+            {
+                Width = 22, Height = 22,
+                Background = new SolidColorBrush(swatchColor),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x42)),
+                BorderThickness = new Avalonia.Thickness(1),
+                CornerRadius = new Avalonia.CornerRadius(3),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            });
+            var status = resolved is null ? "unresolved (will use fallback tint)" :
+                         resolved.Width == 1 && resolved.Height == 1 ? $"flat color ({resolved.ResolvedPath})" :
+                         $"texture {resolved.Width}×{resolved.Height} ({resolved.ResolvedPath})";
+            row.Children.Add(new TextBlock
+            {
+                Text = $"{label}: {name}",
+                Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xEE)),
+                Width = 170,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            });
+            row.Children.Add(new TextBlock
+            {
+                Text = status,
+                Foreground = new SolidColorBrush(resolved is null
+                    ? Color.FromRgb(0x6F, 0x6F, 0x7A)
+                    : Color.FromRgb(0x3F, 0xCB, 0x8E)),
+                FontSize = 11,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            });
+            stack.Children.Add(row);
+        }
+
+        var btnRow = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Margin = new Avalonia.Thickness(0, 14, 0, 0),
+        };
+        var ok = new Button { Content = "OK", Padding = new Avalonia.Thickness(20, 4) };
+        ok.Click += (_, _) => w.Close();
+        btnRow.Children.Add(ok);
+        stack.Children.Add(btnRow);
+
+        w.Content = stack;
+        _vm.StatusMessage = $"Asset root added: {resolvedPath} ({addedShaders} shaders)";
+        return w.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// Decode a <see cref="MapSlopper.Core.Assets.AssetLibrary.ResolvedTexture"/> into
+    /// an Avalonia color for swatch display. Falls back to a neutral gray
+    /// when the texture is encoded (PNG/JPG bytes, expensive to decode
+    /// for a single swatch — Skia could decode but the swatch isn't
+    /// load-bearing visually).
+    /// </summary>
+    private static Color ColorFromResolved(MapSlopper.Core.Assets.AssetLibrary.ResolvedTexture? r)
+    {
+        if (r is null) return Color.FromRgb(0x33, 0x33, 0x3A);
+        if (r.Rgba is { Length: >= 4 })
+        {
+            // For small textures (1x1 synth), the average is the same as
+            // the single pixel; for larger we sample the centre.
+            var pix = (r.Width * (r.Height / 2) + r.Width / 2) * 4;
+            if (pix + 3 >= r.Rgba.Length) pix = 0;
+            return Color.FromRgb(r.Rgba[pix], r.Rgba[pix + 1], r.Rgba[pix + 2]);
+        }
+        return Color.FromRgb(0x55, 0x55, 0x60);
     }
 
     private async void OnClosingAsync(object? sender, CancelEventArgs e)

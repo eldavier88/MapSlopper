@@ -84,11 +84,11 @@
 
             <GridSplitter Grid.Column="1" Background="#3A3A42" ResizeDirection="Columns" />
 
-            <TabControl Grid.Column="2">
+            <TabControl Grid.Column="2" Name="ViewTabs">
                 <TabItem Header="2D Editor">
                     <local:Editor2DControl Name="Canvas" />
                 </TabItem>
-                <TabItem Header="3D Preview">
+                <TabItem Header="3D Preview" Name="Tab3D">
                     <local:Preview3DControl Name="Preview3D" />
                 </TabItem>
             </TabControl>

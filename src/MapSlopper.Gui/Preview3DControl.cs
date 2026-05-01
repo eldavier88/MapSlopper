@@ -106,6 +106,20 @@ public sealed class Preview3DControl : Control
         ScheduleRebuild();
     }
 
+    /// <summary>
+    /// Re-pull asset roots, rebuild geometry, and invalidate the visual.
+    /// Called by <see cref="MainWindow"/> when the 3D Preview tab becomes
+    /// selected, so a control that was hidden when the user added an
+    /// asset root or edited the heightmap still wakes up cleanly.
+    /// </summary>
+    public void ForceRefresh()
+    {
+        if (_vm is null) return;
+        ReloadAssetsIfChanged();
+        ScheduleRebuild();
+        InvalidateVisual();
+    }
+
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(EditorViewModel.Project))
@@ -120,20 +134,32 @@ public sealed class Preview3DControl : Control
 
     /// <summary>
     /// Force the preview to re-scan its asset roots. Call after the user
-    /// adds/removes a root from the View menu.
+    /// adds/removes a root from the View menu. Always appends the
+    /// bundled MapSlopper baseq3 (shipped next to the exe) as a fallback
+    /// so the default <c>random/*</c> shaders resolve without any user
+    /// configuration.
     /// </summary>
     public void ReloadAssets()
     {
         if (_vm is null) return;
-        _assets = AssetLibrary.Load(_vm.Project.AssetRoots);
+        var combined = AssetRootHelper.WithBundledFallback(_vm.Project.AssetRoots);
+        _assets = AssetLibrary.Load(combined);
         _textures = new TextureCache(_assets);
         _lastAssetRoots.Clear();
         _lastAssetRoots.AddRange(_vm.Project.AssetRoots);
-        _assetStatus = _assets.RootDescriptions.Count == 0
-            ? "no asset roots (add via View menu)"
-            : $"{_assets.RootDescriptions.Count} root(s), {_assets.ShaderCount} shaders";
+        var userCount = _vm.Project.AssetRoots.Count;
+        var totalCount = _assets.RootDescriptions.Count;
+        _assetStatus = userCount == 0
+            ? $"bundled only ({_assets.ShaderCount} shaders)"
+            : $"{userCount} user + {Math.Max(0, totalCount - userCount)} bundled root(s), {_assets.ShaderCount} shaders";
         InvalidateVisual();
     }
+
+    /// <summary>
+    /// Returns the current asset library so callers (e.g. the asset-add
+    /// success dialog in the main window) can probe per-shader resolution.
+    /// </summary>
+    public AssetLibrary Assets => _assets;
 
     private void ReloadAssetsIfChanged()
     {
@@ -405,15 +431,7 @@ public sealed class Preview3DControl : Control
 
         if (_faces.Count == 0)
         {
-            context.FillRectangle(new SolidColorBrush(Color.FromRgb(20, 24, 32)), new Rect(bounds.Size));
-            var help =
-                _statusLine + "\n"
-                + "Right-drag = look, WASD = move, QE = up/down, F = frame, scroll = speed\n"
-                + "Tip: View → Add Asset Root... to point at a baseq3/ folder or .pk3 for textures.";
-            var fmt = new FormattedText(
-                help, Typeface.Default, 14, TextAlignment.Left, TextWrapping.Wrap,
-                new Size(bounds.Width - 40, bounds.Height));
-            context.DrawText(Brushes.LightGray, new Point(20, 20), fmt);
+            DrawEmptyState(context, bounds);
             return;
         }
 
@@ -529,6 +547,127 @@ public sealed class Preview3DControl : Control
             PixelFormat.Bgra8888, AlphaFormat.Premul);
         _bbW = w;
         _bbH = h;
+    }
+
+    /// <summary>
+    /// Render the "nothing to show yet" diagnostic card. Replaces the
+    /// previous bare top-left text dump with a structured, centred panel
+    /// listing exactly which preconditions failed (outline missing /
+    /// polygon not closed / heightmap empty) and what the user should
+    /// do next. Always renders the asset-library status + camera primer
+    /// so the user never feels stuck.
+    /// </summary>
+    private void DrawEmptyState(DrawingContext context, Rect bounds)
+    {
+        // Subtle vertical gradient background — a clean dark canvas that
+        // visually distinguishes "preview is alive but empty" from the
+        // 2D editor's grid.
+        var bg = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(Color.FromRgb(0x12, 0x14, 0x1B), 0),
+                new GradientStop(Color.FromRgb(0x06, 0x07, 0x0B), 1),
+            },
+        };
+        context.FillRectangle(bg, new Rect(bounds.Size));
+
+        var headlineColor = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xEE));
+        var bodyColor = new SolidColorBrush(Color.FromRgb(0xA8, 0xA8, 0xB3));
+        var muteColor = new SolidColorBrush(Color.FromRgb(0x6F, 0x6F, 0x7A));
+        var accentColor = new SolidColorBrush(Color.FromRgb(0x5B, 0x8D, 0xEF));
+        var goodColor = new SolidColorBrush(Color.FromRgb(0x3F, 0xCB, 0x8E));
+
+        // Decide the headline + steps based on actual project state.
+        string headline;
+        string body;
+        var steps = new List<(string Bullet, string Text, IBrush Color)>();
+        if (_vm is null)
+        {
+            headline = "3D preview not ready";
+            body = "Initializing the editor view-model. If this persists, restart MapSlopper.";
+        }
+        else
+        {
+            var graph = _vm.Project.Outline;
+            var pointCount = graph.Points.Count;
+            var edgeCount = graph.Edges.Count;
+            var closed = _vm.IsClosedPolygon;
+
+            if (pointCount == 0)
+            {
+                headline = "Draw an outline to see your map in 3D";
+                body = "Switch to the 2D Editor tab and place at least three points to define the floor plan, then close the polygon by linking the last point back to the first.";
+                steps.Add(("1.", "Pick the Add Point tool (key 1) and click in the 2D editor.", bodyColor));
+                steps.Add(("2.", "Place at least three points, then connect the last to the first.", bodyColor));
+                steps.Add(("3.", "Pick the Height Brush (key 7) and paint floor cells.", bodyColor));
+            }
+            else if (!closed)
+            {
+                headline = $"Outline open ({pointCount} points, {edgeCount} edges)";
+                body = "The polygon must be closed (every point on a single ring) before MapSlopper can generate brushes. Use the Connect tool (key 5) to link the last point back to the first.";
+                steps.Add(("→", "Switch to the 2D Editor tab.", accentColor));
+                steps.Add(("→", "Use the Connect tool (key 5) to close the loop.", accentColor));
+            }
+            else
+            {
+                headline = "Polygon closed — paint the heightmap";
+                body = "The outline is leak-free, but no floor cells have been painted yet so no brushes were generated. Pick the Height Brush (key 7) and paint at least one cell inside the polygon.";
+                steps.Add(("→", "Pick the Height Brush (key 7).", accentColor));
+                steps.Add(("→", "Click and drag inside the polygon on the 2D Editor.", accentColor));
+            }
+
+            steps.Add(("✓", $"Asset library: {_assetStatus}",
+                _assets.ShaderCount > 0 ? goodColor : muteColor));
+
+            if (!string.IsNullOrEmpty(_statusLine)
+                && !_statusLine.StartsWith("3D preview", StringComparison.OrdinalIgnoreCase))
+            {
+                steps.Add(("!", _statusLine, muteColor));
+            }
+        }
+
+        // Layout the card centred horizontally, top-aligned with margin.
+        const double cardW = 520;
+        var cardX = Math.Max(20, (bounds.Width - cardW) / 2);
+        var cardY = Math.Min(80, bounds.Height * 0.1);
+
+        // Headline.
+        var headlineFt = new FormattedText(
+            headline, new Typeface("Segoe UI", FontStyle.Normal, FontWeight.SemiBold),
+            22, TextAlignment.Left, TextWrapping.Wrap, new Size(cardW, 200));
+        context.DrawText(headlineColor, new Point(cardX, cardY), headlineFt);
+
+        // Body paragraph.
+        var bodyFt = new FormattedText(
+            body, new Typeface("Segoe UI"),
+            13, TextAlignment.Left, TextWrapping.Wrap, new Size(cardW, 200));
+        context.DrawText(bodyColor, new Point(cardX, cardY + 38), bodyFt);
+
+        // Steps list.
+        var stepY = cardY + 38 + bodyFt.Bounds.Height + 18;
+        foreach (var (bullet, text, color) in steps)
+        {
+            var bulletFt = new FormattedText(
+                bullet, new Typeface("Segoe UI", FontStyle.Normal, FontWeight.Bold),
+                13, TextAlignment.Center, TextWrapping.NoWrap, new Size(20, 20));
+            context.DrawText(color, new Point(cardX, stepY), bulletFt);
+
+            var textFt = new FormattedText(
+                text, new Typeface("Segoe UI"),
+                13, TextAlignment.Left, TextWrapping.Wrap, new Size(cardW - 28, 200));
+            context.DrawText(color, new Point(cardX + 24, stepY), textFt);
+            stepY += Math.Max(20, textFt.Bounds.Height + 6);
+        }
+
+        // Footer: camera controls primer (always shown, low contrast).
+        var primer = "Camera: right-drag look • WASD move • QE up/down • F frame • scroll = speed";
+        var primerFt = new FormattedText(
+            primer, new Typeface("Segoe UI"),
+            11, TextAlignment.Left, TextWrapping.NoWrap, new Size(bounds.Width - 24, 20));
+        context.DrawText(muteColor, new Point(12, bounds.Height - 22), primerFt);
     }
 
     private void BlitToBitmap()

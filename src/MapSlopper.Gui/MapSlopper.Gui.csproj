@@ -29,4 +29,14 @@
   <ItemGroup>
     <ProjectReference Include="..\MapSlopper.Core\MapSlopper.Core.csproj" />
   </ItemGroup>
+
+  <!-- Ship the bundled MapSlopper baseq3 (mapslopper.shader + supporting
+       triggers.json) next to the GUI exe so a fresh install can render
+       the default project textures with no external assets. -->
+  <ItemGroup>
+    <Content Include="..\..\assets\**\*.*">
+      <Link>assets\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>
