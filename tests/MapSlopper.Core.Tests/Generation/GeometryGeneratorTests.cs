@@ -82,4 +82,55 @@ public class GeometryGeneratorTests
         Assert.Contains("info_player_start", text);
         Assert.Contains("worldspawn", text);
     }
+
+    /// <summary>
+    /// When cells are painted at a high raw value the per-piece floor base-slab
+    /// must NOT extend from the absolute map bottom all the way up (the
+    /// "2000u thick brush" bug). Verify that generation succeeds and that no
+    /// floor brush has a Z bottom at the absolute floor base while its top is
+    /// near the painted height (which would indicate the old 2000-unit-thick slab).
+    /// </summary>
+    [Fact]
+    public void HighPaintedRoom_FloorBaseSlab_IsNotThick()
+    {
+        const ushort HighRaw = 2000;
+        var project = MakeSquareRoomProject(hmSize: 4, cellSize: 32, floorH: HighRaw);
+        double zFloorBase = -project.FloorBaseThickness; // -16
+
+        var result = GeometryGenerator.Generate(project);
+        Assert.True(result.Ok, string.Join("; ", result.Issues.Select(i => i.Message)));
+
+        var doc = result.Document!;
+
+        // The old bug: a floor brush with bottom at zFloorBase=-16 and top
+        // at zFloorBase+HighRaw=1984, giving ~2000 units thickness.
+        // With the fix the base-slab bottom is clamped to
+        // max(zFloorBase, baseTop - StackOverlapRaw).
+        // StackOverlapRaw = HeightQuantStep = 16.
+        // So the maximum floor-slab span for HighRaw=2000 should be 16 units.
+        // We check no floor brush's Z range spans from near zFloorBase to near HighRaw.
+
+        foreach (var brush in doc.Worldspawn.Brushes)
+        {
+            double minZ = double.MaxValue;
+            double maxZ = double.MinValue;
+            foreach (var plane in brush.Planes)
+            {
+                foreach (var z in new[] { plane.P1.Z, plane.P2.Z, plane.P3.Z })
+                {
+                    if (z < minZ) minZ = z;
+                    if (z > maxZ) maxZ = z;
+                }
+            }
+            if (minZ >= maxZ - 0.001) continue;
+
+            // Flag brushes whose bottom is near the absolute map floor
+            // AND whose top is near the painted height — that's the bug pattern.
+            var isNearAbsoluteBottom = minZ < zFloorBase + 1.0;
+            var isNearPaintedHeight = maxZ > zFloorBase + HighRaw - 1.0;
+            Assert.False(isNearAbsoluteBottom && isNearPaintedHeight,
+                $"Brush spans from near absolute floor bottom ({minZ:F1}) to near painted height ({maxZ:F1}) " +
+                $"— this is the 2000u thick brush bug. Z range: [{minZ:F1}, {maxZ:F1}]");
+        }
+    }
 }
