@@ -334,6 +334,9 @@ public sealed class EditorViewModel : INotifyPropertyChanged
         var radius = 8.0 / Math.Max(_pixelsPerWorldUnit, 1e-6);
         var hit = _project.Outline.PickPoint(worldPos, radius);
         if (hit is not null) return hit.Position;
+
+        if (ShouldSnapToGrid) return SnapWorldToCell(worldPos);
+
         var step = _project.Heightmap.CellSize / 4.0;
         if (step <= 0) return worldPos;
         var sx = Math.Round(worldPos.X / step) * step;
