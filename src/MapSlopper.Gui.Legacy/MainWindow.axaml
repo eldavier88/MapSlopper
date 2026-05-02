@@ -1,0 +1,82 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:MapSlopper.Gui.Legacy"
+        x:Class="MapSlopper.Gui.Legacy.MainWindow"
+        Width="1024" Height="700"
+        Title="MapSlopper Legacy"
+        Background="#1E1E1E">
+    <DockPanel LastChildFill="True">
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Name="MenuNew" Header="_New" />
+                <MenuItem Name="MenuOpen" Header="_Open..." />
+                <MenuItem Name="MenuSave" Header="_Save" />
+                <MenuItem Name="MenuSaveAs" Header="Save _As..." />
+                <Separator />
+                <MenuItem Name="MenuExport" Header="_Export .map..." />
+                <Separator />
+                <MenuItem Name="MenuExit" Header="E_xit" />
+            </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Name="MenuUndo" Header="_Undo" />
+                <MenuItem Name="MenuRedo" Header="_Redo" />
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Name="MenuAbout" Header="_About" />
+            </MenuItem>
+        </Menu>
+
+        <Border DockPanel.Dock="Bottom" Background="#2D2D30" Padding="6,3">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock Grid.Column="0" Name="StatusText" Text="Ready." Foreground="#DDD" />
+                <TextBlock Grid.Column="1" Name="UndoState" Text="Undo:0 Redo:0" Foreground="#AAA" Margin="12,0" />
+                <TextBlock Grid.Column="2" Text="MapSlopper Legacy (.NET 5)" Foreground="#666" Margin="12,0,0,0" />
+            </Grid>
+        </Border>
+
+        <Grid Name="MainGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="130" MinWidth="40" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="*" MinWidth="200" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="200" MinWidth="40" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Background="#252526" Spacing="0">
+                <TextBlock Text="Tools" Foreground="#888" Margin="8,8,8,4" FontWeight="Bold" />
+                <Button Name="ToolBtn1" Tag="0" Content="1: Add Point" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="#333337" Foreground="#DDD" Margin="2,1" Padding="8,5" />
+                <Button Name="ToolBtn2" Tag="1" Content="2: Insert Edge" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="#333337" Foreground="#DDD" Margin="2,1" Padding="8,5" />
+                <Button Name="ToolBtn3" Tag="2" Content="3: Move Point" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="#333337" Foreground="#DDD" Margin="2,1" Padding="8,5" />
+                <Button Name="ToolBtn4" Tag="3" Content="4: Erase Edge" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="#333337" Foreground="#DDD" Margin="2,1" Padding="8,5" />
+                <Button Name="ToolBtn5" Tag="4" Content="5: Connect" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="#333337" Foreground="#DDD" Margin="2,1" Padding="8,5" />
+                <Button Name="ToolBtn6" Tag="5" Content="6: Remove Point" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="#333337" Foreground="#DDD" Margin="2,1" Padding="8,5" />
+                <Button Name="ToolBtn7" Tag="6" Content="7: Height Brush" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="#333337" Foreground="#DDD" Margin="2,1" Padding="8,5" />
+                <Button Name="ToolBtn8" Tag="7" Content="8: Trigger Brush" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Background="#333337" Foreground="#DDD" Margin="2,1" Padding="8,5" />
+            </StackPanel>
+
+            <GridSplitter Grid.Column="1" Background="#3E3E42" ResizeDirection="Columns" />
+
+            <local:Editor2DControl Grid.Column="2" Name="Canvas" />
+
+            <GridSplitter Grid.Column="3" Background="#3E3E42" ResizeDirection="Columns" />
+
+            <Border Grid.Column="4" Background="#252526" Padding="8">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Active Tool" Foreground="#888" />
+                    <TextBlock Name="ActiveToolText" Text="Add Point" Foreground="#DDD" FontWeight="Bold" />
+                    <Separator />
+                    <TextBlock Text="Brush size (cells)" Foreground="#888" />
+                    <NumericUpDown Name="BrushSize" Minimum="1" Maximum="64" Value="1" Increment="1" />
+                    <TextBlock Text="Paint value (0..65535)" Foreground="#888" />
+                    <NumericUpDown Name="PaintValue" Minimum="0" Maximum="65535" Value="64" Increment="16" />
+                    <Separator />
+                    <CheckBox Name="SnapCheck" Content="Snap to grid" Foreground="#DDD" />
+                    <Separator />
+                    <TextBlock Name="CursorText" Text="Cursor: -" Foreground="#AAA" />
+                    <TextBlock Name="ToolHintText" Text="" Foreground="#9CB" TextWrapping="Wrap" FontSize="11" />
+                    <TextBlock Text="Tip: middle-drag to pan, wheel to zoom." Foreground="#666" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>

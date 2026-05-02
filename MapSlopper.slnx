@@ -3,6 +3,7 @@
     <Project Path="src/MapSlopper.Cli/MapSlopper.Cli.csproj" />
     <Project Path="src/MapSlopper.Core/MapSlopper.Core.csproj" />
     <Project Path="src/MapSlopper.Gui/MapSlopper.Gui.csproj" />
+    <Project Path="src/MapSlopper.Gui.Legacy/MapSlopper.Gui.Legacy.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MapSlopper.Core.Tests/MapSlopper.Core.Tests.csproj" />
