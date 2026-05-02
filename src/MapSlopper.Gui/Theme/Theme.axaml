@@ -1,62 +1,125 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!--
-    Centralised design tokens for MapSlopper's dark theme. App.axaml
-    pulls this dictionary in via <ResourceInclude> so every window /
-    control can reach these brushes by name with {DynamicResource Foo}.
+    Centralised design tokens for MapSlopper's next-gen dark theme.
+    App.axaml pulls this dictionary in via <ResourceInclude> so every
+    window / control can reach these brushes by name with
+    {DynamicResource Foo}.
 
     Naming convention:
-      Surface*  - background fills (window, panel, hover, raised)
+      Surface*  - background fills (window, panel, hover, raised, glass)
       Border*   - 1px hairlines / dividers
       Text*     - foreground text colours by emphasis level
-      Accent*   - the brand blue (active tools, primary buttons, focus
-                  rings) so we only have one place to retune saturation
+      Accent*   - the cyan/teal brand accent (active tools, primary
+                  buttons, focus rings, glow effects)
+      Status*   - success / warning / error indicators
       Trigger*  - heightmap trigger paint overlay defaults
+      Corner*   - consistent corner-radius tokens
+      Spacing*  - spacing rhythm tokens
     -->
 
-    <!-- Surface colours, dark-only for now. -->
-    <SolidColorBrush x:Key="SurfaceWindow"  Color="#16161A" />
-    <SolidColorBrush x:Key="SurfacePanel"   Color="#181820" />
-    <SolidColorBrush x:Key="SurfaceCard"    Color="#1E1E24" />
-    <SolidColorBrush x:Key="SurfaceRaised"  Color="#24242C" />
-    <SolidColorBrush x:Key="SurfaceHover"   Color="#2A2A30" />
-    <SolidColorBrush x:Key="SurfaceMuted"   Color="#222222" />
+    <!-- ══════════════════════════════════════════════════════
+         Surface colours — deep charcoal family with subtle
+         blue undertone for a premium dark feel.
+         ══════════════════════════════════════════════════════ -->
+    <SolidColorBrush x:Key="SurfaceWindow"  Color="#0F1014" />
+    <SolidColorBrush x:Key="SurfacePanel"   Color="#131318" />
+    <SolidColorBrush x:Key="SurfaceCard"    Color="#1A1A22" />
+    <SolidColorBrush x:Key="SurfaceRaised"  Color="#20202A" />
+    <SolidColorBrush x:Key="SurfaceHover"   Color="#282834" />
+    <SolidColorBrush x:Key="SurfaceMuted"   Color="#1C1C24" />
 
-    <!-- Border / divider lines. -->
-    <SolidColorBrush x:Key="BorderSubtle"   Color="#2A2A32" />
-    <SolidColorBrush x:Key="BorderDefault"  Color="#3A3A42" />
-    <SolidColorBrush x:Key="BorderStrong"   Color="#4A4A52" />
+    <!-- Glass-like card surface with subtle transparency for overlays. -->
+    <SolidColorBrush x:Key="SurfaceGlass"   Color="#1A1A24" Opacity="0.88" />
+    <SolidColorBrush x:Key="SurfaceGlassHover" Color="#22222E" Opacity="0.92" />
+    <SolidColorBrush x:Key="SurfaceOverlay" Color="#000000" Opacity="0.45" />
 
-    <!-- Text colours by emphasis. -->
-    <SolidColorBrush x:Key="TextPrimary"    Color="#E8E8EE" />
-    <SolidColorBrush x:Key="TextSecondary"  Color="#C0C0C8" />
-    <SolidColorBrush x:Key="TextMuted"      Color="#9A9AA4" />
-    <SolidColorBrush x:Key="TextDisabled"   Color="#6F6F7A" />
+    <!-- Elevated surface for floating panels / tooltips / dialogs. -->
+    <SolidColorBrush x:Key="SurfaceElevated" Color="#1E1E28" />
+    <SolidColorBrush x:Key="SurfaceElevatedHigh" Color="#242430" />
+
+    <!-- ══════════════════════════════════════════════════════
+         Border / divider lines — subtle cool-gray tones.
+         ══════════════════════════════════════════════════════ -->
+    <SolidColorBrush x:Key="BorderSubtle"   Color="#1E1E28" />
+    <SolidColorBrush x:Key="BorderDefault"  Color="#2C2C38" />
+    <SolidColorBrush x:Key="BorderStrong"   Color="#3C3C4A" />
+    <SolidColorBrush x:Key="BorderAccent"   Color="#00B4D8" Opacity="0.35" />
+    <SolidColorBrush x:Key="BorderGlow"     Color="#00D4FF" Opacity="0.18" />
+
+    <!-- ══════════════════════════════════════════════════════
+         Text colours by emphasis — high-contrast for
+         accessibility while still feeling refined.
+         ══════════════════════════════════════════════════════ -->
+    <SolidColorBrush x:Key="TextPrimary"    Color="#F0F0F8" />
+    <SolidColorBrush x:Key="TextSecondary"  Color="#B8B8C8" />
+    <SolidColorBrush x:Key="TextMuted"      Color="#8888A0" />
+    <SolidColorBrush x:Key="TextDisabled"   Color="#505068" />
     <SolidColorBrush x:Key="TextOnAccent"   Color="#FFFFFF" />
+    <SolidColorBrush x:Key="TextLink"       Color="#48D1CC" />
 
-    <!-- Brand accent (focus rings, primary buttons, active states). -->
-    <SolidColorBrush x:Key="AccentPrimary"  Color="#1F6AE0" />
-    <SolidColorBrush x:Key="AccentHover"    Color="#3A82F0" />
-    <SolidColorBrush x:Key="AccentBorder"   Color="#4A90FF" />
-    <SolidColorBrush x:Key="AccentSubtle"   Color="#5B8DEF" />
+    <!-- ══════════════════════════════════════════════════════
+         Brand accent — cyan / teal family for a modern,
+         high-tech aesthetic. Expanded family includes glow
+         and subtle variants for different interaction states.
+         ══════════════════════════════════════════════════════ -->
+    <SolidColorBrush x:Key="AccentPrimary"  Color="#00B4D8" />
+    <SolidColorBrush x:Key="AccentHover"    Color="#00D4FF" />
+    <SolidColorBrush x:Key="AccentBorder"   Color="#48CAE4" />
+    <SolidColorBrush x:Key="AccentSubtle"   Color="#0096C7" />
+    <SolidColorBrush x:Key="AccentMuted"    Color="#00B4D8" Opacity="0.15" />
+    <SolidColorBrush x:Key="AccentGlow"     Color="#00D4FF" Opacity="0.10" />
+    <SolidColorBrush x:Key="AccentSurface"  Color="#00B4D8" Opacity="0.08" />
 
-    <!-- Status colours used by the asset-add result dialog and the
-         3D preview's empty-state checklist. -->
-    <SolidColorBrush x:Key="StatusGood"     Color="#3FCB8E" />
-    <SolidColorBrush x:Key="StatusWarn"     Color="#FFA928" />
-    <SolidColorBrush x:Key="StatusBad"      Color="#E55A5A" />
+    <!-- Secondary accent (warm) for complementary highlights. -->
+    <SolidColorBrush x:Key="AccentSecondary"      Color="#7C5CFC" />
+    <SolidColorBrush x:Key="AccentSecondaryHover"  Color="#9678FF" />
 
-    <!-- Editor canvas-only colours (used by Editor2DControl /
-         Preview3DControl directly in code rather than XAML). Kept as
-         resources so the Theme phase can keep retuning them in one
-         place once the design system layer (Phase 2.x) is finished. -->
-    <SolidColorBrush x:Key="CanvasBackground" Color="#181A1F" />
-    <SolidColorBrush x:Key="CanvasGridFaint"  Color="#404040" />
-    <SolidColorBrush x:Key="CanvasGridStrong" Color="#606060" />
+    <!-- ══════════════════════════════════════════════════════
+         Status colours — vivid and saturated for visibility
+         against dark surfaces, with glow variants.
+         ══════════════════════════════════════════════════════ -->
+    <SolidColorBrush x:Key="StatusGood"     Color="#00E68A" />
+    <SolidColorBrush x:Key="StatusWarn"     Color="#FFB020" />
+    <SolidColorBrush x:Key="StatusBad"      Color="#FF4D6A" />
+    <SolidColorBrush x:Key="StatusInfo"     Color="#38BDF8" />
+    <SolidColorBrush x:Key="StatusGoodMuted" Color="#00E68A" Opacity="0.12" />
+    <SolidColorBrush x:Key="StatusWarnMuted" Color="#FFB020" Opacity="0.12" />
+    <SolidColorBrush x:Key="StatusBadMuted"  Color="#FF4D6A" Opacity="0.12" />
 
-    <!-- Editor type ramp. The Inter family ships from the
-         Avalonia.Fonts.Inter NuGet package; falls back to Segoe UI
-         on machines where Inter loading fails. -->
+    <!-- ══════════════════════════════════════════════════════
+         Editor canvas-only colours (used by Editor2DControl /
+         Preview3DControl directly in code rather than XAML).
+         ══════════════════════════════════════════════════════ -->
+    <SolidColorBrush x:Key="CanvasBackground" Color="#0D0D12" />
+    <SolidColorBrush x:Key="CanvasGridFaint"  Color="#1E1E2A" />
+    <SolidColorBrush x:Key="CanvasGridStrong" Color="#3A3A4C" />
+
+    <!-- ══════════════════════════════════════════════════════
+         Corner radius tokens — consistent rounded-corner system.
+         ══════════════════════════════════════════════════════ -->
+    <CornerRadius x:Key="CornerSmall">4</CornerRadius>
+    <CornerRadius x:Key="CornerMedium">6</CornerRadius>
+    <CornerRadius x:Key="CornerLarge">8</CornerRadius>
+    <CornerRadius x:Key="CornerXLarge">12</CornerRadius>
+    <CornerRadius x:Key="CornerRound">100</CornerRadius>
+
+    <!-- ══════════════════════════════════════════════════════
+         Spacing tokens — 4px rhythm base.
+         ══════════════════════════════════════════════════════ -->
+    <Thickness x:Key="SpacingXS">2</Thickness>
+    <Thickness x:Key="SpacingSM">4</Thickness>
+    <Thickness x:Key="SpacingMD">8</Thickness>
+    <Thickness x:Key="SpacingLG">12</Thickness>
+    <Thickness x:Key="SpacingXL">16</Thickness>
+    <Thickness x:Key="SpacingXXL">24</Thickness>
+
+    <!-- ══════════════════════════════════════════════════════
+         Typography — Inter from the Avalonia.Fonts.Inter
+         NuGet package; falls back to Segoe UI on machines
+         where Inter loading fails.
+         ══════════════════════════════════════════════════════ -->
     <FontFamily x:Key="FontDisplay">avares://Avalonia.Fonts.Inter/Assets#Inter, Segoe UI, sans-serif</FontFamily>
     <FontFamily x:Key="FontUi">avares://Avalonia.Fonts.Inter/Assets#Inter, Segoe UI, sans-serif</FontFamily>
+    <FontFamily x:Key="FontMono">Cascadia Code, JetBrains Mono, Consolas, monospace</FontFamily>
 </ResourceDictionary>

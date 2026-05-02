@@ -710,17 +710,128 @@ public partial class MainWindow : Window
         var w = new Window
         {
             Title = "About MapSlopper",
-            Width = 360,
-            Height = 160,
+            Width = 420,
+            Height = 340,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = new TextBlock
-            {
-                Text = "MapSlopper — 2D map editor for Quake 3.\nAvalonia 11 / .NET 10 build.",
-                Margin = new Avalonia.Thickness(20),
-                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-            },
+            Background = new SolidColorBrush(Color.FromRgb(0x0F, 0x10, 0x14)),
         };
+
+        var root = new StackPanel { Spacing = 0 };
+
+        // Hero header with accent gradient feel
+        var header = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x13, 0x13, 0x18)),
+            Padding = new Avalonia.Thickness(28, 24, 28, 20),
+        };
+        var headerStack = new StackPanel { Spacing = 6 };
+        headerStack.Children.Add(new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            Spacing = 10,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "◆",
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x00, 0xB4, 0xD8)),
+                    FontSize = 28,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                },
+                new TextBlock
+                {
+                    Text = "MapSlopper",
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF8)),
+                    FontSize = 26,
+                    FontWeight = FontWeight.Bold,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                },
+            },
+        });
+        headerStack.Children.Add(new TextBlock
+        {
+            Text = "2D Map Editor for Quake 3 / JK2 / JKA",
+            Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0xA0)),
+            FontSize = 13,
+        });
+        header.Child = headerStack;
+        root.Children.Add(header);
+
+        // Divider
+        root.Children.Add(new Border
+        {
+            Height = 1,
+            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x28)),
+        });
+
+        // Info section
+        var infoPanel = new StackPanel
+        {
+            Margin = new Avalonia.Thickness(28, 20, 28, 16),
+            Spacing = 10,
+        };
+
+        var runtimeVersion = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription;
+        var avaloniaVersion = typeof(Application).Assembly.GetName().Version?.ToString(3) ?? "11.x";
+        var osInfo = System.Runtime.InteropServices.RuntimeInformation.OSDescription;
+
+        void AddInfoRow(string label, string value)
+        {
+            var row = new Grid { ColumnDefinitions = Avalonia.Controls.ColumnDefinitions.Parse("120,*") };
+            row.Children.Add(new TextBlock
+            {
+                Text = label,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0xA0)),
+                FontSize = 12,
+                [Grid.ColumnProperty] = 0,
+            });
+            row.Children.Add(new TextBlock
+            {
+                Text = value,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF8)),
+                FontSize = 12,
+                FontWeight = FontWeight.SemiBold,
+                [Grid.ColumnProperty] = 1,
+            });
+            infoPanel.Children.Add(row);
+        }
+
+        AddInfoRow("Framework", runtimeVersion);
+        AddInfoRow("Avalonia", avaloniaVersion);
+        AddInfoRow("Platform", osInfo.Length > 40 ? osInfo[..40] + "…" : osInfo);
+
+        root.Children.Add(infoPanel);
+
+        // Divider
+        root.Children.Add(new Border
+        {
+            Height = 1,
+            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x28)),
+            Margin = new Avalonia.Thickness(28, 0),
+        });
+
+        // Footer with close button
+        var footer = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Margin = new Avalonia.Thickness(28, 16, 28, 16),
+        };
+        var closeBtn = new Button
+        {
+            Content = "Close",
+            Padding = new Avalonia.Thickness(24, 6),
+            Background = new SolidColorBrush(Color.FromRgb(0x00, 0xB4, 0xD8)),
+            Foreground = new SolidColorBrush(Colors.White),
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
+        };
+        closeBtn.Click += (_, _) => w.Close();
+        footer.Children.Add(closeBtn);
+        root.Children.Add(footer);
+
+        w.Content = root;
         await w.ShowDialog(this).ConfigureAwait(true);
     }
 

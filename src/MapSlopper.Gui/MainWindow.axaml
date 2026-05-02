@@ -7,136 +7,527 @@
         Background="{DynamicResource SurfaceWindow}"
         FontFamily="{DynamicResource FontUi}"
         DragDrop.AllowDrop="True">
+
     <Window.Styles>
+        <!-- ═══════════════════════════════════════════════
+             Tool Button — refined card-style with glow on hover
+             ═══════════════════════════════════════════════ -->
         <Style Selector="Button.tool">
-            <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderDefault}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceCard}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{DynamicResource CornerSmall}" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
-            <Setter Property="Padding" Value="8,6" />
-            <Setter Property="Margin" Value="2,1" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Margin" Value="4,2" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button.tool:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderDefault}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
         </Style>
         <Style Selector="Button.tool:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource BorderDefault}" />
-            <Setter Property="TextBlock.Foreground" Value="{DynamicResource TextOnAccent}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+            <Setter Property="TextBlock.Foreground" Value="{DynamicResource TextPrimary}" />
         </Style>
         <Style Selector="Button.tool.active">
-            <Setter Property="Background" Value="{DynamicResource AccentPrimary}" />
-            <Setter Property="Foreground" Value="{DynamicResource TextOnAccent}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+            <Setter Property="Background" Value="{DynamicResource AccentMuted}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentPrimary}" />
+            <Setter Property="BorderThickness" Value="1.5" />
         </Style>
         <Style Selector="Button.tool.active /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentMuted}" />
+            <Setter Property="TextBlock.Foreground" Value="{DynamicResource AccentHover}" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════
+             Section header label in side panels
+             ═══════════════════════════════════════════════ -->
+        <Style Selector="TextBlock.section-header">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+            <Setter Property="Margin" Value="4,12,4,6" />
+            <Setter Property="LetterSpacing" Value="1.2" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════
+             Inspector label (property name)
+             ═══════════════════════════════════════════════ -->
+        <Style Selector="TextBlock.inspector-label">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+            <Setter Property="Margin" Value="0,2,0,1" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════
+             Inspector value (current data)
+             ═══════════════════════════════════════════════ -->
+        <Style Selector="TextBlock.inspector-value">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════
+             Hint / caption text
+             ═══════════════════════════════════════════════ -->
+        <Style Selector="TextBlock.hint">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════
+             Tab control — refined underline-style tabs
+             ═══════════════════════════════════════════════ -->
+        <Style Selector="TabControl">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="TabItem">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+        <Style Selector="TabItem:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+        <Style Selector="TabItem:selected">
+            <Setter Property="Foreground" Value="{DynamicResource AccentHover}" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════
+             GridSplitter — thin accent line
+             ═══════════════════════════════════════════════ -->
+        <Style Selector="GridSplitter">
+            <Setter Property="Background" Value="{DynamicResource BorderSubtle}" />
+        </Style>
+        <Style Selector="GridSplitter:pointerover">
             <Setter Property="Background" Value="{DynamicResource AccentPrimary}" />
-            <Setter Property="TextBlock.Foreground" Value="{DynamicResource TextOnAccent}" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════
+             Separator — refined hairline
+             ═══════════════════════════════════════════════ -->
+        <Style Selector="Separator">
+            <Setter Property="Background" Value="{DynamicResource BorderSubtle}" />
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Margin" Value="0,6" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════
+             Menu — blended into header bar
+             ═══════════════════════════════════════════════ -->
+        <Style Selector="Menu">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="MenuItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="FontSize" Value="12" />
         </Style>
     </Window.Styles>
-    <DockPanel LastChildFill="True">
-        <Menu DockPanel.Dock="Top">
-            <MenuItem Header="_File">
-                <MenuItem Name="MenuNew" Header="_New" InputGesture="Ctrl+N" />
-                <MenuItem Name="MenuAutoMap" Header="_Generate Automatic Map..." />
-                <MenuItem Name="MenuOpen" Header="_Open..." InputGesture="Ctrl+O" />
-                <MenuItem Name="MenuOpenRecent" Header="Open _Recent" />
-                <MenuItem Name="MenuSave" Header="_Save" InputGesture="Ctrl+S" />
-                <MenuItem Name="MenuSaveAs" Header="Save _As..." InputGesture="Ctrl+Shift+S" />
-                <Separator />
-                <MenuItem Name="MenuExport" Header="_Export .map..." InputGesture="Ctrl+E" />
-                <Separator />
-                <MenuItem Name="MenuExit" Header="E_xit" />
-            </MenuItem>
-            <MenuItem Header="_Edit">
-                <MenuItem Name="MenuUndo" Header="_Undo" InputGesture="Ctrl+Z" />
-                <MenuItem Name="MenuRedo" Header="_Redo" InputGesture="Ctrl+Y" />
-            </MenuItem>
-            <MenuItem Header="_View">
-                <MenuItem Name="MenuLevels" Header="_Levels..." />
-                <MenuItem Name="MenuFrame" Header="_Frame Project" InputGesture="F" />
-                <Separator />
-                <MenuItem Name="MenuAddAssetRoot" Header="Add Asset _Root..." />
-                <MenuItem Name="MenuAddAssetPk3" Header="Add Asset .pk_3..." />
-                <MenuItem Name="MenuClearAssetRoots" Header="_Clear Asset Roots" />
-            </MenuItem>
-            <MenuItem Header="_Help">
-                <MenuItem Name="MenuAbout" Header="_About" />
-            </MenuItem>
-        </Menu>
 
-        <Border DockPanel.Dock="Bottom" Background="#222" Padding="6,3">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                <TextBlock Grid.Column="0" Name="StatusText" Text="Ready." Foreground="#DDD" />
-                <TextBlock Grid.Column="1" Name="UndoState" Text="Undo:0 Redo:0" Foreground="#AAA" Margin="12,0" />
-                <TextBlock Grid.Column="2" Name="ClosedState" Text="Closed: no" Foreground="#AAA" Margin="12,0" />
-                <TextBlock Grid.Column="3" Text="MapSlopper" Foreground="#666" Margin="12,0,0,0" />
+    <DockPanel LastChildFill="True">
+
+        <!-- ═══════════════════════════════════════════════
+             Header / Toolbar area — subtle top bar with
+             app branding, menu, and quick-action zone.
+             ═══════════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Top"
+                Background="{DynamicResource SurfacePanel}"
+                BorderBrush="{DynamicResource BorderSubtle}"
+                BorderThickness="0,0,0,1"
+                Padding="0">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <!-- App brand badge -->
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal"
+                            Margin="12,0,8,0"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="◆"
+                               Foreground="{DynamicResource AccentPrimary}"
+                               FontSize="14"
+                               VerticalAlignment="Center"
+                               Margin="0,0,6,0" />
+                    <TextBlock Text="MapSlopper"
+                               Foreground="{DynamicResource TextPrimary}"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Opacity="0.8" />
+                </StackPanel>
+
+                <!-- Main menu bar -->
+                <Menu Grid.Column="1" VerticalAlignment="Center">
+                    <MenuItem Header="_File">
+                        <MenuItem Name="MenuNew" Header="_New" InputGesture="Ctrl+N" />
+                        <MenuItem Name="MenuAutoMap" Header="_Generate Automatic Map..." />
+                        <MenuItem Name="MenuOpen" Header="_Open..." InputGesture="Ctrl+O" />
+                        <MenuItem Name="MenuOpenRecent" Header="Open _Recent" />
+                        <MenuItem Name="MenuSave" Header="_Save" InputGesture="Ctrl+S" />
+                        <MenuItem Name="MenuSaveAs" Header="Save _As..." InputGesture="Ctrl+Shift+S" />
+                        <Separator />
+                        <MenuItem Name="MenuExport" Header="_Export .map..." InputGesture="Ctrl+E" />
+                        <Separator />
+                        <MenuItem Name="MenuExit" Header="E_xit" />
+                    </MenuItem>
+                    <MenuItem Header="_Edit">
+                        <MenuItem Name="MenuUndo" Header="_Undo" InputGesture="Ctrl+Z" />
+                        <MenuItem Name="MenuRedo" Header="_Redo" InputGesture="Ctrl+Y" />
+                    </MenuItem>
+                    <MenuItem Header="_View">
+                        <MenuItem Name="MenuLevels" Header="_Levels..." />
+                        <MenuItem Name="MenuFrame" Header="_Frame Project" InputGesture="F" />
+                        <Separator />
+                        <MenuItem Name="MenuAddAssetRoot" Header="Add Asset _Root..." />
+                        <MenuItem Name="MenuAddAssetPk3" Header="Add Asset .pk_3..." />
+                        <MenuItem Name="MenuClearAssetRoots" Header="_Clear Asset Roots" />
+                    </MenuItem>
+                    <MenuItem Header="_Help">
+                        <MenuItem Name="MenuAbout" Header="_About" />
+                    </MenuItem>
+                </Menu>
+
+                <!-- Keyboard shortcut hint -->
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            Margin="0,0,14,0"
+                            VerticalAlignment="Center"
+                            Opacity="0.5">
+                    <TextBlock Text="⌘ Ctrl+Shift+P"
+                               Foreground="{DynamicResource TextMuted}"
+                               FontSize="10"
+                               VerticalAlignment="Center" />
+                </StackPanel>
             </Grid>
         </Border>
 
+        <!-- ═══════════════════════════════════════════════
+             Status bar — refined bottom bar with version badge.
+             ═══════════════════════════════════════════════ -->
+        <Border DockPanel.Dock="Bottom"
+                Background="{DynamicResource SurfacePanel}"
+                BorderBrush="{DynamicResource BorderSubtle}"
+                BorderThickness="0,1,0,0"
+                Padding="10,4">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+                <!-- Status message with indicator dot -->
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Border Width="6" Height="6"
+                            CornerRadius="3"
+                            Background="{DynamicResource StatusGood}"
+                            VerticalAlignment="Center"
+                            Margin="0,0,8,0" />
+                    <TextBlock Name="StatusText"
+                               Text="Ready."
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="11"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Undo/Redo state -->
+                <Border Grid.Column="1"
+                        Background="{DynamicResource SurfaceCard}"
+                        CornerRadius="{DynamicResource CornerSmall}"
+                        Padding="8,2"
+                        Margin="8,0">
+                    <TextBlock Name="UndoState"
+                               Text="Undo:0 Redo:0"
+                               Foreground="{DynamicResource TextMuted}"
+                               FontSize="10" />
+                </Border>
+
+                <!-- Closed state -->
+                <Border Grid.Column="2"
+                        Background="{DynamicResource SurfaceCard}"
+                        CornerRadius="{DynamicResource CornerSmall}"
+                        Padding="8,2"
+                        Margin="4,0">
+                    <TextBlock Name="ClosedState"
+                               Text="Closed: no"
+                               Foreground="{DynamicResource TextMuted}"
+                               FontSize="10" />
+                </Border>
+
+                <!-- Separator dot -->
+                <TextBlock Grid.Column="3"
+                           Text="·"
+                           Foreground="{DynamicResource TextDisabled}"
+                           FontSize="14"
+                           VerticalAlignment="Center"
+                           Margin="8,0" />
+
+                <!-- Version badge -->
+                <Border Grid.Column="4"
+                        Background="{DynamicResource AccentSurface}"
+                        CornerRadius="{DynamicResource CornerRound}"
+                        Padding="10,2"
+                        Margin="0,0,4,0">
+                    <TextBlock Text="MapSlopper"
+                               Foreground="{DynamicResource AccentPrimary}"
+                               FontSize="10"
+                               FontWeight="SemiBold" />
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════
+             Main content area — three-column layout with
+             refined side panels and central editor.
+             ═══════════════════════════════════════════════ -->
         <Grid Name="MainGrid">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="140" MinWidth="40" />
-                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="160" MinWidth="40" />
+                <ColumnDefinition Width="3" />
                 <ColumnDefinition Width="*" MinWidth="200" />
-                <ColumnDefinition Width="4" />
-                <ColumnDefinition Width="220" MinWidth="40" />
+                <ColumnDefinition Width="3" />
+                <ColumnDefinition Width="240" MinWidth="40" />
             </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" Background="#181820" Spacing="0">
-                <TextBlock Text="Tools" Foreground="#888" Margin="8,8,8,4" FontWeight="Bold" />
-                <Button Name="ToolBtn1" Classes="tool" Content="1: Add Point" />
-                <Button Name="ToolBtn2" Classes="tool" Content="2: Insert Edge" />
-                <Button Name="ToolBtn3" Classes="tool" Content="3: Move Point" />
-                <Button Name="ToolBtn4" Classes="tool" Content="4: Erase Edge" />
-                <Button Name="ToolBtn5" Classes="tool" Content="5: Connect" />
-                <Button Name="ToolBtn6" Classes="tool" Content="6: Remove Point" />
-                <Button Name="ToolBtn7" Classes="tool" Content="7: Height Brush" />
-                <Button Name="ToolBtn8" Classes="tool" Content="8: Trigger Brush" />
-            </StackPanel>
 
-            <GridSplitter Grid.Column="1" Background="#3A3A42" ResizeDirection="Columns" />
+            <!-- ═══════════════════════════════════════════
+                 LEFT PANEL — Tool Palette
+                 ═══════════════════════════════════════════ -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource SurfacePanel}"
+                    BorderBrush="{DynamicResource BorderSubtle}"
+                    BorderThickness="0,0,1,0">
+                <DockPanel>
+                    <!-- Panel header -->
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,10,12,8"
+                            BorderBrush="{DynamicResource BorderSubtle}"
+                            BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔧"
+                                       FontSize="11"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,6,0" />
+                            <TextBlock Text="TOOLS"
+                                       Classes="section-header"
+                                       Margin="0" />
+                        </StackPanel>
+                    </Border>
 
-            <TabControl Grid.Column="2" Name="ViewTabs">
-                <TabItem Header="2D Editor">
-                    <local:Editor2DControl Name="Canvas" />
-                </TabItem>
-                <TabItem Header="3D Preview" Name="Tab3D">
-                    <local:Preview3DControl Name="Preview3D" />
-                </TabItem>
-            </TabControl>
+                    <!-- Tool buttons -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="0" Margin="4,6,4,4">
+                            <Button Name="ToolBtn1" Classes="tool" Content="⊕  1: Add Point" />
+                            <Button Name="ToolBtn2" Classes="tool" Content="╱  2: Insert Edge" />
+                            <Button Name="ToolBtn3" Classes="tool" Content="✥  3: Move Point" />
+                            <Button Name="ToolBtn4" Classes="tool" Content="✂  4: Erase Edge" />
+                            <Button Name="ToolBtn5" Classes="tool" Content="⟁  5: Connect" />
+                            <Button Name="ToolBtn6" Classes="tool" Content="⊖  6: Remove Point" />
+                            <Button Name="ToolBtn7" Classes="tool" Content="▓  7: Height Brush" />
+                            <Button Name="ToolBtn8" Classes="tool" Content="◈  8: Trigger Brush" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
 
-            <GridSplitter Grid.Column="3" Background="#3A3A42" ResizeDirection="Columns" />
+            <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
 
-            <Border Grid.Column="4" Background="#181820" Padding="8">
-                <StackPanel Spacing="6">
-                <TextBlock Text="Active Tool" Foreground="#888" />
-                <TextBlock Name="ActiveToolText" Text="Add Point" Foreground="#DDD" FontWeight="Bold" />
-                <Separator />
-                <TextBlock Text="Brush size (cells)" Foreground="#888" />
-                <NumericUpDown Name="BrushSize" Minimum="1" Maximum="64" Value="1" Increment="1" />
-                <TextBlock Text="Paint value (Quake units, 0..65535)" Foreground="#888" />
-                <NumericUpDown Name="PaintValue" Minimum="0" Maximum="65535" Value="64" Increment="16" />
-                <local:HeightHistogramControl Name="HeightHistogram" Height="80" />
-                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,0">
-                    <TextBlock Grid.Column="0" Text="Lo" Foreground="#888" VerticalAlignment="Center" Margin="0,0,4,0" />
-                    <Slider Grid.Column="1" Name="LevelsMinSlider" Minimum="0" Maximum="65535" />
-                    <TextBlock Grid.Column="2" Name="LevelsMinText" Foreground="#DDD" VerticalAlignment="Center" Width="48" TextAlignment="Right" />
-                </Grid>
-                <Grid ColumnDefinitions="Auto,*,Auto">
-                    <TextBlock Grid.Column="0" Text="Hi" Foreground="#888" VerticalAlignment="Center" Margin="0,0,4,0" />
-                    <Slider Grid.Column="1" Name="LevelsMaxSlider" Minimum="0" Maximum="65535" />
-                    <TextBlock Grid.Column="2" Name="LevelsMaxText" Foreground="#DDD" VerticalAlignment="Center" Width="48" TextAlignment="Right" />
-                </Grid>
-                <TextBlock Text="Floor top Z = paint value. Auto-clamped to (ceilingHeight - 8) at export." Foreground="#666" TextWrapping="Wrap" FontSize="11" />
-                <Separator />
-                <CheckBox Name="SnapCheck" Content="Snap Move to grid (G / Shift)" Foreground="#DDD" />
-                <Separator />
-                <TextBlock Name="TriggerPaletteHeader" Text="Trigger palette" Foreground="#888" />
-                <StackPanel Name="TriggerPalette" Spacing="3" />
-                <Separator />
-                <TextBlock Name="CursorText" Text="Cursor: -" Foreground="#AAA" />
-                <TextBlock Name="ToolHintText" Text="" Foreground="#9CB" TextWrapping="Wrap" FontSize="11" />
-                <TextBlock Text="Tip: middle-drag or Space+drag to pan, wheel to zoom. Esc resets the active tool's chain." Foreground="#666" TextWrapping="Wrap" />
-            </StackPanel>
-        </Border>
+            <!-- ═══════════════════════════════════════════
+                 CENTER — Tab control (2D Editor / 3D Preview)
+                 ═══════════════════════════════════════════ -->
+            <Border Grid.Column="2"
+                    Background="{DynamicResource SurfaceWindow}">
+                <TabControl Name="ViewTabs">
+                    <TabItem Header="⬡  2D Editor">
+                        <local:Editor2DControl Name="Canvas" />
+                    </TabItem>
+                    <TabItem Header="◇  3D Preview" Name="Tab3D">
+                        <local:Preview3DControl Name="Preview3D" />
+                    </TabItem>
+                </TabControl>
+            </Border>
+
+            <GridSplitter Grid.Column="3" ResizeDirection="Columns" />
+
+            <!-- ═══════════════════════════════════════════
+                 RIGHT PANEL — Inspector / Properties
+                 ═══════════════════════════════════════════ -->
+            <Border Grid.Column="4"
+                    Background="{DynamicResource SurfacePanel}"
+                    BorderBrush="{DynamicResource BorderSubtle}"
+                    BorderThickness="1,0,0,0">
+                <DockPanel>
+                    <!-- Panel header -->
+                    <Border DockPanel.Dock="Top"
+                            Padding="12,10,12,8"
+                            BorderBrush="{DynamicResource BorderSubtle}"
+                            BorderThickness="0,0,0,1">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚙"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,6,0" />
+                            <TextBlock Text="INSPECTOR"
+                                       Classes="section-header"
+                                       Margin="0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Inspector content -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="4" Margin="12,8,12,12">
+
+                            <!-- Active Tool section -->
+                            <TextBlock Text="ACTIVE TOOL" Classes="section-header" />
+                            <Border Background="{DynamicResource SurfaceCard}"
+                                    CornerRadius="{DynamicResource CornerMedium}"
+                                    Padding="10,8"
+                                    BorderBrush="{DynamicResource BorderSubtle}"
+                                    BorderThickness="1">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Name="ActiveToolText"
+                                               Text="Add Point"
+                                               Classes="inspector-value" />
+                                    <TextBlock Name="ToolHintText"
+                                               Text=""
+                                               Foreground="{DynamicResource AccentPrimary}"
+                                               TextWrapping="Wrap"
+                                               FontSize="11" />
+                                </StackPanel>
+                            </Border>
+
+                            <Separator />
+
+                            <!-- Brush Settings section -->
+                            <TextBlock Text="BRUSH SETTINGS" Classes="section-header" />
+                            <Border Background="{DynamicResource SurfaceCard}"
+                                    CornerRadius="{DynamicResource CornerMedium}"
+                                    Padding="10,8"
+                                    BorderBrush="{DynamicResource BorderSubtle}"
+                                    BorderThickness="1">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Size (cells)" Classes="inspector-label" />
+                                    <NumericUpDown Name="BrushSize"
+                                                   Minimum="1"
+                                                   Maximum="64"
+                                                   Value="1"
+                                                   Increment="1" />
+                                    <TextBlock Text="Paint value (0–65535)" Classes="inspector-label" />
+                                    <NumericUpDown Name="PaintValue"
+                                                   Minimum="0"
+                                                   Maximum="65535"
+                                                   Value="64"
+                                                   Increment="16" />
+                                </StackPanel>
+                            </Border>
+
+                            <Separator />
+
+                            <!-- Height Histogram section -->
+                            <TextBlock Text="HISTOGRAM" Classes="section-header" />
+                            <Border Background="{DynamicResource SurfaceCard}"
+                                    CornerRadius="{DynamicResource CornerMedium}"
+                                    Padding="6"
+                                    BorderBrush="{DynamicResource BorderSubtle}"
+                                    BorderThickness="1">
+                                <StackPanel Spacing="4">
+                                    <local:HeightHistogramControl Name="HeightHistogram" Height="80" />
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Lo"
+                                                   Classes="inspector-label"
+                                                   VerticalAlignment="Center"
+                                                   Margin="4,0,6,0" />
+                                        <Slider Grid.Column="1"
+                                                Name="LevelsMinSlider"
+                                                Minimum="0"
+                                                Maximum="65535" />
+                                        <TextBlock Grid.Column="2"
+                                                   Name="LevelsMinText"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center"
+                                                   Width="48"
+                                                   TextAlignment="Right"
+                                                   FontSize="11" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <TextBlock Grid.Column="0"
+                                                   Text="Hi"
+                                                   Classes="inspector-label"
+                                                   VerticalAlignment="Center"
+                                                   Margin="4,0,6,0" />
+                                        <Slider Grid.Column="1"
+                                                Name="LevelsMaxSlider"
+                                                Minimum="0"
+                                                Maximum="65535" />
+                                        <TextBlock Grid.Column="2"
+                                                   Name="LevelsMaxText"
+                                                   Foreground="{DynamicResource TextPrimary}"
+                                                   VerticalAlignment="Center"
+                                                   Width="48"
+                                                   TextAlignment="Right"
+                                                   FontSize="11" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="Floor top Z = paint value. Auto-clamped to (ceilingHeight − 8) at export."
+                                       Classes="hint"
+                                       Margin="4,2,0,0" />
+
+                            <Separator />
+
+                            <!-- Options section -->
+                            <TextBlock Text="OPTIONS" Classes="section-header" />
+                            <Border Background="{DynamicResource SurfaceCard}"
+                                    CornerRadius="{DynamicResource CornerMedium}"
+                                    Padding="10,8"
+                                    BorderBrush="{DynamicResource BorderSubtle}"
+                                    BorderThickness="1">
+                                <CheckBox Name="SnapCheck"
+                                          Content="Snap Move to grid (G / Shift)"
+                                          Foreground="{DynamicResource TextPrimary}"
+                                          FontSize="12" />
+                            </Border>
+
+                            <Separator />
+
+                            <!-- Trigger Palette section -->
+                            <TextBlock Name="TriggerPaletteHeader"
+                                       Text="TRIGGER PALETTE"
+                                       Classes="section-header" />
+                            <StackPanel Name="TriggerPalette" Spacing="3" />
+
+                            <Separator />
+
+                            <!-- Cursor info -->
+                            <Border Background="{DynamicResource SurfaceCard}"
+                                    CornerRadius="{DynamicResource CornerMedium}"
+                                    Padding="10,6"
+                                    BorderBrush="{DynamicResource BorderSubtle}"
+                                    BorderThickness="1">
+                                <TextBlock Name="CursorText"
+                                           Text="Cursor: —"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           FontSize="11" />
+                            </Border>
+
+                            <!-- Help tip -->
+                            <Border Background="{DynamicResource AccentSurface}"
+                                    CornerRadius="{DynamicResource CornerMedium}"
+                                    Padding="10,8"
+                                    Margin="0,6,0,0">
+                                <TextBlock Text="💡 Middle-drag or Space+drag to pan, wheel to zoom. Esc resets the active tool."
+                                           Foreground="{DynamicResource TextMuted}"
+                                           TextWrapping="Wrap"
+                                           FontSize="10.5" />
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
         </Grid>
     </DockPanel>
 </Window>
