@@ -21,6 +21,18 @@ MapSlopper is a 2.5D Quake 3 level editor targeting .NET 5.0 (legacy) and .NET 1
 - **Gotcha**: The xunit v3 test runner sometimes hangs after all tests pass. All tests do complete — the process just doesn't exit cleanly. Use `timeout 30 dotnet test ...` or check output for "Passed"/"Failed" counts if the command seems stuck.
 - The net5.0 TFM test runs require .NET 5 runtime which is not installed in Cloud Agent VMs (only .NET 10 SDK). Always use `-f net10.0` for test runs.
 
+### Modern GUI SkiaSharp workaround
+
+Avalonia.Skia transitively pulls `SkiaSharp.NativeAssets.Linux 2.88.9` (native version 88.1), but SkiaSharp 3.119.0 requires native version [119.0, 120.0). To run the modern GUI on Linux:
+```bash
+curl -Lo /tmp/skiasharp-linux.nupkg \
+  "https://api.nuget.org/v3-flatcontainer/skiasharp.nativeassets.linux/3.119.0/skiasharp.nativeassets.linux.3.119.0.nupkg"
+mkdir -p /tmp/skiasharp-native && unzip -o /tmp/skiasharp-linux.nupkg -d /tmp/skiasharp-native
+cp /tmp/skiasharp-native/runtimes/linux-x64/native/libSkiaSharp.so \
+  /root/.nuget/packages/skiasharp.nativeassets.linux/2.88.9/runtimes/linux-x64/native/libSkiaSharp.so
+```
+Then launch with: `LD_LIBRARY_PATH=src/MapSlopper.Gui/bin/Debug/net10.0/runtimes/linux-x64/native DISPLAY=:1 dotnet run --project src/MapSlopper.Gui`
+
 ### Legacy GUI (Gui.Legacy) notes
 
 - Targets net5.0 with Avalonia 0.10.21. `Avalonia.Themes.Fluent` does NOT exist as a separate NuGet package in 0.10.x — it's bundled in the core Avalonia package.
