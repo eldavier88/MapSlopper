@@ -6,17 +6,11 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net5.0;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
+    <SuppressTfmSupportBuildWarnings Condition="'$(TargetFramework)' == 'net5.0'">true</SuppressTfmSupportBuildWarnings>
   </PropertyGroup>
 
-  <!-- `dotnet publish` always produces a framework-dependent single-file
-       executable: one self-contained MapSlopper.Cli[.exe] with all our
-       managed DLLs and the .pdb embedded inside. End-users still need
-       the .NET 10 runtime installed (SelfContained=false), which keeps
-       the file small (~1 MB vs ~70 MB self-contained). These props only
-       affect publish; `dotnet build` keeps producing loose DLLs in
-       bin/Debug for fast iteration. -->
   <PropertyGroup>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
